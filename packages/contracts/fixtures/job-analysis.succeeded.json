@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-11-16T09:00:02.000Z",
+  "locale": "en",
+  "jobContext": {
+    "summary": "The posting points to a consultant role in consulting, client-facing work, and a video interview.",
+    "source": "rules",
+    "formality": "business-casual",
+    "points": [
+      {
+        "id": "role",
+        "value": "Consultant",
+        "evidence": "Consultant"
+      },
+      {
+        "id": "industry",
+        "value": "Consulting",
+        "evidence": "consulting"
+      },
+      {
+        "id": "atmosphere",
+        "value": null,
+        "evidence": null
+      },
+      {
+        "id": "interview-format",
+        "value": "Video interview",
+        "evidence": "interviews are held over video"
+      },
+      {
+        "id": "dress-code",
+        "value": null,
+        "evidence": null
+      }
+    ],
+    "cues": [
+      {
+        "id": "client-facing",
+        "label": "Client-facing work",
+        "evidence": "present findings to clients"
+      },
+      {
+        "id": "video-interview",
+        "label": "Video interview",
+        "evidence": "interviews are held over video"
+      }
+    ]
+  }
+}

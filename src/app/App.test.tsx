@@ -7,7 +7,7 @@ import { renderApp } from "../test/renderApp";
 
 async function saveJob(user: ReturnType<typeof userEvent.setup>, text = "Account executive — client meetings on video") {
   await user.type(screen.getByLabelText("Job description"), text);
-  await user.click(screen.getByRole("button", { name: "Save job description" }));
+  await user.click(screen.getByRole("button", { name: "Analyze posting" }));
 }
 
 describe("App draft step", () => {
@@ -15,10 +15,10 @@ describe("App draft step", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(screen.getByRole("button", { name: "Save job description" }));
+    await user.click(screen.getByRole("button", { name: "Analyze posting" }));
 
     expect(screen.getByText("Enter a job description to continue.")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 7");
+    expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 8");
   });
 
   it("saves a job description, shows it as text, and allows editing", async () => {
@@ -38,7 +38,7 @@ describe("App draft step", () => {
 
     expect(screen.queryByRole("button", { name: "Choose a photo" })).not.toBeInTheDocument();
     await saveJob(user);
-    expect(screen.getByRole("button", { name: "Choose a photo" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Choose a photo" })).toBeInTheDocument();
   });
 });
 
@@ -50,11 +50,11 @@ describe("App image-ready step", () => {
     renderApp();
 
     await saveJob(user);
-    await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+    await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
 
     const preview = await screen.findByRole("img", { name: "Selected photo preview" });
     expect(preview).toHaveAttribute("src", "blob:preview-1");
-    expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 7");
+    expect(screen.getByRole("status")).toHaveTextContent("Step 3 of 8");
     const normalizedBlob = create.mock.calls[0][0];
     expect(normalizedBlob).toBeInstanceOf(Blob);
 
@@ -62,7 +62,7 @@ describe("App image-ready step", () => {
 
     expect(revoke).toHaveBeenCalledWith("blob:preview-1");
     expect(screen.queryByRole("img", { name: "Selected photo preview" })).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 7");
+    expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 8");
     expect(screen.getByText("Account executive — client meetings on video")).toBeInTheDocument();
   });
 });

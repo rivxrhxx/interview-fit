@@ -3,12 +3,15 @@ import {
   ANALYSIS_REQUEST_FIELDS,
   ContractError,
   ERROR_MESSAGES,
+  JOB_ANALYSIS_REQUEST_FIELDS,
   parseAnalysisJob,
   parseApiErrorBody,
+  parseJobAnalysis,
   parseTryOnJob,
   type AnalysisJob,
   type AnalysisJobId,
   type ErrorCode,
+  type JobAnalysis,
   type TryOnJob,
   type TryOnJobId,
   type TryOnRequest,
@@ -36,8 +39,15 @@ export interface CreateAnalysisJobInput {
   locale?: Locale;
 }
 
+export interface AnalyzeJobInput {
+  jobDescription: string;
+  locale?: Locale;
+}
+
 /** Typed first-party backend boundary. React never calls `fetch` directly. */
 export interface ApiClient {
+  /** Job and company-atmosphere analysis. Sends text only, never an image (R1.5). */
+  analyzeJob(input: AnalyzeJobInput, signal?: AbortSignal): Promise<JobAnalysis>;
   createAnalysisJob(input: CreateAnalysisJobInput, signal?: AbortSignal): Promise<AnalysisJob>;
   getAnalysisJob(id: AnalysisJobId, signal?: AbortSignal): Promise<AnalysisJob>;
   cancelAnalysisJob(id: AnalysisJobId): Promise<void>;
@@ -115,6 +125,18 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
   }
 
   return {
+    analyzeJob(input, signal) {
+      const body = {
+        [JOB_ANALYSIS_REQUEST_FIELDS.jobDescription]: input.jobDescription,
+        ...(input.locale ? { [JOB_ANALYSIS_REQUEST_FIELDS.locale]: input.locale } : {}),
+      };
+      return request(
+        API_ROUTES.jobAnalyses,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
+        parseJobAnalysis,
+      );
+    },
+
     createAnalysisJob(input, signal) {
       const form = new FormData();
       form.set(ANALYSIS_REQUEST_FIELDS.consentVersion, input.consentVersion);

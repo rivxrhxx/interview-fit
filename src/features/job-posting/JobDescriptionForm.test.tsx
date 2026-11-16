@@ -13,7 +13,7 @@ function setup(initialText = "") {
   const user = userEvent.setup();
   render(<JobDescriptionForm initialText={initialText} onSubmit={onSubmit} />);
   const field = screen.getByLabelText("Job description");
-  const submit = screen.getByRole("button", { name: "Save job description" });
+  const submit = screen.getByRole("button", { name: "Analyze posting" });
   return { onSubmit, fetchSpy, user, field, submit };
 }
 
@@ -79,7 +79,7 @@ describe("JobDescriptionForm", () => {
     expect(field).toHaveFocus();
     await user.keyboard("Backend developer");
     await user.tab();
-    expect(screen.getByRole("button", { name: "Save job description" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Analyze posting" })).toHaveFocus();
     await user.keyboard("{Enter}");
 
     expect(onSubmit).toHaveBeenCalledTimes(1);

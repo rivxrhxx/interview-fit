@@ -61,7 +61,7 @@ describe("camera capture", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Camera access was not allowed. You can choose a photo file instead.",
     );
-    await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+    await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
     await vi.waitFor(() => expect(onImageReady).toHaveBeenCalledWith(expect.objectContaining({ source: "upload" })));
     expect(adapters.image.prepare).toHaveBeenCalledTimes(1);
   });

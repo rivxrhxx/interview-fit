@@ -41,7 +41,13 @@ describe("locale in the contract", () => {
   it("defaults a result without a locale to English and rejects unknown locales", () => {
     const base = {
       generatedAt: "2026-11-16T09:00:00.000Z",
-      jobContext: { summary: "s", cues: [] },
+      jobContext: {
+        summary: "s",
+        source: "rules",
+        formality: "unknown",
+        points: ["role", "industry", "atmosphere", "interview-format", "dress-code"].map((id) => ({ id, value: null, evidence: null })),
+        cues: [],
+      },
       observations: [],
       recommendations: [],
     };

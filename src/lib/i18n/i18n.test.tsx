@@ -63,13 +63,13 @@ describe("switching language", () => {
     const user = userEvent.setup();
     renderApp(createMockAdapters(), undefined, "ko");
 
-    expect(screen.getByRole("heading", { level: 1, name: "지원할 공고와 사진을 알려주세요" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "지원할 공고를 알려주세요" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("ko");
     expect(screen.getByRole("button", { name: "한국어" })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("button", { name: "English" }));
 
-    expect(screen.getByRole("heading", { level: 1, name: "Describe the role and choose a photo" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Tell us about the role" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
     expect(window.localStorage.getItem("interview-fit.locale")).toBe("en");
   });
@@ -92,8 +92,8 @@ describe("Korean flow", () => {
     renderApp(adapters, undefined, "ko");
 
     await user.type(screen.getByLabelText("채용 공고"), "금융권 컨설턴트, 화상 면접");
-    await user.click(screen.getByRole("button", { name: "공고 저장" }));
-    await user.upload(screen.getByLabelText("사진 파일"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+    await user.click(screen.getByRole("button", { name: "공고 분석하기" }));
+    await user.upload(await screen.findByLabelText("사진 파일"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
     await user.click(await screen.findByRole("button", { name: "이 사진 쓰기" }));
 
     const checkbox = screen.getByRole("checkbox", { name: /사진과 채용 공고를 Interview Fit과 제공자에게 보내는 데 동의해요/ });
@@ -111,8 +111,8 @@ describe("Korean flow", () => {
     const user = userEvent.setup();
     renderApp(createMockAdapters(), undefined, "ko");
     await user.type(screen.getByLabelText("채용 공고"), "Consultant");
-    await user.click(screen.getByRole("button", { name: "공고 저장" }));
-    await user.upload(screen.getByLabelText("사진 파일"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+    await user.click(screen.getByRole("button", { name: "공고 분석하기" }));
+    await user.upload(await screen.findByLabelText("사진 파일"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
     await user.click(await screen.findByRole("button", { name: "이 사진 쓰기" }));
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "동의하고 분석하기" }));

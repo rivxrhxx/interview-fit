@@ -1,12 +1,15 @@
 import {
+  citableJobIds,
   passesContentPolicy,
+  type JobContext,
   type JobCue,
+  type JobInsightPoint,
   type Locale,
+  type Observation,
   type ObservationCategory,
   type Recommendation,
 } from "../../../../packages/contracts/src/index.ts";
-import type { GuidanceEngine } from "../guidance.ts";
-import { cuePhrase, extractJobCues, type CueId } from "./jobCues.ts";
+import { cuePhrase, type CueId } from "./jobCues.ts";
 
 const MAX_RECOMMENDATIONS = 6;
 
@@ -16,9 +19,9 @@ interface Tip {
   why: string;
 }
 
+type AttireKind = "formal" | "business-casual" | "creative" | "casual";
+
 interface Copy {
-  noCues: string;
-  summary: (list: string) => string;
   /** Rationale citing cues, then the reason. */
   cites: (mention: string, reason: string) => string;
   /** Rationale without a cue. */
@@ -26,13 +29,13 @@ interface Copy {
   join: (parts: string[]) => string;
   quote: (phrase: string, evidence: string) => string;
   tips: Partial<Record<ObservationCategory, Tip>>;
-  attire: Record<"formal" | "creative" | "casual", { adjustment: string; setting: string }>;
+  attire: Record<AttireKind, { adjustment: string; setting: string }>;
+  /** Rationale for attire: what the posting says, then the setting. */
+  attireRationale: (mention: string, setting: string) => string;
 }
 
 const COPY: Record<Locale, Copy> = {
   en: {
-    noCues: "No specific presentation cues were found in the job description.",
-    summary: (list) => `The job description mentions ${list}.`,
     cites: (mention, reason) => `The posting mentions ${mention}; ${reason}.`,
     plain: (reason) => `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`,
     join: (parts) =>
@@ -61,6 +64,10 @@ const COPY: Record<Locale, Copy> = {
         adjustment: "Consider a structured layer such as a blazer, if that feels comfortable for you.",
         setting: "where business attire is common",
       },
+      "business-casual": {
+        adjustment: "Consider a collared shirt or a neat blouse, with an optional light jacket.",
+        setting: "where business-casual clothing is common",
+      },
       creative: {
         adjustment: "Consider an outfit that feels polished and true to your personal style.",
         setting: "where individual style is often welcome",
@@ -70,10 +77,9 @@ const COPY: Record<Locale, Copy> = {
         setting: "where smart-casual clothing is common",
       },
     },
+    attireRationale: (mention, setting) => `The posting mentions ${mention}, ${setting}.`,
   },
   ko: {
-    noCues: "공고에서 특별한 단서를 찾지 못했어요.",
-    summary: (list) => `공고에서 ${list} 내용을 확인했어요.`,
     cites: (mention, reason) => `공고에서 ${mention} 내용을 확인했어요. ${reason}.`,
     plain: (reason) => `${reason}.`,
     join: (parts) => parts.join(", "),
@@ -101,6 +107,10 @@ const COPY: Record<Locale, Copy> = {
         adjustment: "편하게 느껴진다면 블레이저 같은 구조감 있는 겉옷을 고려해 보세요.",
         setting: "이런 환경에서는 비즈니스 복장이 흔해요",
       },
+      "business-casual": {
+        adjustment: "칼라가 있는 셔츠나 단정한 블라우스에, 원한다면 가벼운 재킷을 더하는 것을 고려해 보세요.",
+        setting: "이런 환경에서는 비즈니스 캐주얼이 흔해요",
+      },
       creative: {
         adjustment: "단정하면서도 나다운 스타일의 옷차림을 고려해 보세요.",
         setting: "이런 환경에서는 개성 있는 스타일을 반기는 경우가 많아요",
@@ -110,107 +120,128 @@ const COPY: Record<Locale, Copy> = {
         setting: "이런 환경에서는 스마트 캐주얼이 흔해요",
       },
     },
+    attireRationale: (mention, setting) => `공고에서 ${mention} 내용을 확인했어요. ${setting}.`,
   },
 };
 
-const ATTIRE_RULES: ReadonlyArray<{ cues: CueId[]; kind: keyof Copy["attire"] }> = [
-  { cues: ["formal-industry", "client-facing"], kind: "formal" },
-  { cues: ["creative-industry"], kind: "creative" },
-  { cues: ["technical-role", "casual-workplace"], kind: "casual" },
-];
+/** Cues that explain an attire suggestion, in citation order. */
+const ATTIRE_CUES: readonly CueId[] = ["formal-industry", "client-facing", "creative-industry", "technical-role", "casual-workplace"];
 
-function summarize(cues: JobCue[], locale: Locale): string {
-  const copy = COPY[locale];
-  return cues.length === 0 ? copy.noCues : copy.summary(copy.join(cues.map((cue) => cuePhrase(cue, locale))));
+function attireKind(context: JobContext, cueIds: Set<string>): AttireKind | null {
+  switch (context.formality) {
+    case "formal":
+      return "formal";
+    case "business-casual":
+      return "business-casual";
+    case "smart-casual":
+    case "casual":
+      return cueIds.has("creative-industry") ? "creative" : "casual";
+    case "unknown":
+      return null;
+  }
 }
 
-/** Deterministic rules: no model, so job text cannot steer the output. */
-export const rulesGuidance: GuidanceEngine = {
-  build(jobDescription, observations, locale = "en") {
-    const copy = COPY[locale];
-    const cues = extractJobCues(jobDescription, locale);
-    const byId = new Map(cues.map((cue) => [cue.id, cue]));
-    const mention = (cited: JobCue[]) => copy.join(cited.map((cue) => copy.quote(cuePhrase(cue, locale), cue.evidence)));
-    const cameraCue = byId.get("video-interview") ?? byId.get("remote-work");
-    const recommendations: Recommendation[] = [];
-    const covered = new Set<ObservationCategory>();
+/** A citable item: a catalog cue or a job-analysis point with evidence. */
+interface Citation {
+  id: string;
+  phrase: string;
+  evidence: string;
+}
 
-    for (const observation of observations) {
-      const tip = copy.tips[observation.category];
-      if (observation.assessment !== "adjustable" || !tip || covered.has(observation.category)) continue;
-      covered.add(observation.category);
-      recommendations.push({
-        id: `rec_${observation.category.replace("-", "_")}`,
-        category: observation.category,
-        observationId: observation.id,
-        adjustment: tip.adjustment,
-        rationale: cameraCue ? copy.cites(mention([cameraCue]), tip.why) : copy.plain(tip.why),
-        cueIds: cameraCue ? [cameraCue.id] : [],
-      });
-    }
+function cueCitation(cue: JobCue, locale: Locale): Citation {
+  return { id: cue.id, phrase: cuePhrase(cue, locale), evidence: cue.evidence };
+}
 
-    const attire = ATTIRE_RULES.find((rule) => rule.cues.some((id) => byId.has(id)));
-    if (attire) {
-      const cited = attire.cues.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
-      const { adjustment, setting } = copy.attire[attire.kind];
+function pointCitation(point: JobInsightPoint, locale: Locale): Citation | null {
+  if (point.value === null || point.evidence === null) return null;
+  return { id: point.id, phrase: locale === "ko" ? point.value : point.value.toLowerCase(), evidence: point.evidence };
+}
+
+/** Deterministic suggestions from the job analysis and neutral observations; no model involved. */
+export function suggestRules(context: JobContext, observations: Observation[], locale: Locale = "en"): Recommendation[] {
+  const copy = COPY[locale];
+  const byId = new Map(context.cues.map((cue) => [cue.id, cue]));
+  const points = new Map(context.points.map((point) => [point.id, point]));
+  const mention = (cited: Citation[]) => copy.join(cited.map((item) => copy.quote(item.phrase, item.evidence)));
+  const cameraCue = byId.get("video-interview") ?? byId.get("remote-work");
+  const camera = cameraCue ? cueCitation(cameraCue, locale) : null;
+  const recommendations: Recommendation[] = [];
+  const covered = new Set<ObservationCategory>();
+
+  for (const observation of observations) {
+    const tip = copy.tips[observation.category];
+    if (observation.assessment !== "adjustable" || !tip || covered.has(observation.category)) continue;
+    covered.add(observation.category);
+    recommendations.push({
+      id: `rec_${observation.category.replace("-", "_")}`,
+      category: observation.category,
+      observationId: observation.id,
+      adjustment: tip.adjustment,
+      rationale: camera ? copy.cites(mention([camera]), tip.why) : copy.plain(tip.why),
+      cueIds: camera ? [camera.id] : [],
+    });
+  }
+
+  const kind = attireKind(context, new Set(byId.keys()));
+  if (kind) {
+    // Cite the posting's own dress code first, then the cues behind the formality.
+    const dressCode = pointCitation(points.get("dress-code")!, locale);
+    const cueCitations = ATTIRE_CUES.flatMap((id) => (byId.has(id) ? [cueCitation(byId.get(id)!, locale)] : []));
+    const fallback = [points.get("atmosphere")!, points.get("industry")!]
+      .map((point) => pointCitation(point, locale))
+      .filter((item): item is Citation => item !== null)
+      .slice(0, 1);
+    const cited = dressCode ? [dressCode] : cueCitations.length > 0 ? cueCitations.slice(0, 2) : fallback;
+    if (cited.length > 0) {
+      const { adjustment, setting } = copy.attire[kind];
       recommendations.push({
         id: "rec_attire",
         category: "attire",
         observationId: null,
         adjustment,
-        rationale:
-          locale === "ko"
-            ? copy.cites(mention(cited), setting)
-            : `The posting mentions ${mention(cited)}, ${setting}.`,
-        cueIds: cited.map((cue) => cue.id),
+        rationale: copy.attireRationale(mention(cited), setting),
+        cueIds: cited.map((item) => item.id),
       });
     }
+  }
 
-    if (cameraCue && !covered.has("background")) {
-      const tip = copy.tips.background!;
-      recommendations.push({
-        id: "rec_background",
-        category: "background",
-        observationId: null,
-        adjustment: tip.adjustment,
-        rationale: copy.cites(mention([cameraCue]), tip.why),
-        cueIds: [cameraCue.id],
-      });
-    }
+  if (camera && !covered.has("background")) {
+    const tip = copy.tips.background!;
+    recommendations.push({
+      id: "rec_background",
+      category: "background",
+      observationId: null,
+      adjustment: tip.adjustment,
+      rationale: copy.cites(mention([camera]), tip.why),
+      cueIds: [camera.id],
+    });
+  }
 
-    return { jobContext: { summary: summarize(cues, locale), cues }, recommendations };
-  },
-};
-
-/**
- * Wraps any generator (rules today, possibly a model later) with the content
- * policy and citation rules: every kept suggestion passes the policy (R5.3) and
- * cites an existing cue or observation (R5.1). The policy covers English and Korean.
- */
-export function createPolicyGuidance(generator: GuidanceEngine): GuidanceEngine {
-  return {
-    build(jobDescription, observations, locale = "en") {
-      const raw = generator.build(jobDescription, observations, locale);
-      const cues = raw.jobContext.cues.filter((cue) => passesContentPolicy(cue.label) && passesContentPolicy(cue.evidence));
-      const cueIds = new Set(cues.map((cue) => cue.id));
-      const observationIds = new Set(observations.map((observation) => observation.id));
-      const seen = new Set<string>();
-
-      const recommendations = raw.recommendations
-        .map((rec) => ({ ...rec, cueIds: rec.cueIds.filter((id) => cueIds.has(id)) }))
-        .filter((rec) => {
-          if (seen.has(rec.id)) return false;
-          seen.add(rec.id);
-          const cited = rec.cueIds.length > 0 || (rec.observationId !== null && observationIds.has(rec.observationId));
-          const knownObservation = rec.observationId === null || observationIds.has(rec.observationId);
-          return cited && knownObservation && passesContentPolicy(rec.adjustment) && passesContentPolicy(rec.rationale);
-        })
-        .slice(0, MAX_RECOMMENDATIONS);
-
-      const summary = passesContentPolicy(raw.jobContext.summary) ? raw.jobContext.summary : summarize(cues, locale);
-      return { jobContext: { summary, cues }, recommendations };
-    },
-  };
+  return recommendations;
 }
 
-export const defaultGuidance: GuidanceEngine = createPolicyGuidance(rulesGuidance);
+/**
+ * Applies the content policy and citation rules to suggestions from any writer
+ * (rules or AI): every kept suggestion passes the policy (R5.3), cites an existing
+ * cue, job-analysis point, or observation (R5.1), and IDs are unique.
+ */
+export function filterRecommendations(
+  raw: Recommendation[],
+  context: JobContext,
+  observations: Observation[],
+): Recommendation[] {
+  const citable = citableJobIds(context);
+  const observationIds = new Set(observations.map((observation) => observation.id));
+  const seen = new Set<string>();
+
+  return raw
+    .map((rec) => ({ ...rec, cueIds: [...new Set(rec.cueIds.filter((id) => citable.has(id)))] }))
+    .filter((rec) => {
+      if (seen.has(rec.id)) return false;
+      seen.add(rec.id);
+      const cited = rec.cueIds.length > 0 || (rec.observationId !== null && observationIds.has(rec.observationId));
+      const knownObservation = rec.observationId === null || observationIds.has(rec.observationId);
+      return cited && knownObservation && passesContentPolicy(rec.adjustment) && passesContentPolicy(rec.rationale);
+    })
+    .slice(0, MAX_RECOMMENDATIONS);
+}

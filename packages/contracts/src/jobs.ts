@@ -24,9 +24,58 @@ export interface JobCue {
   evidence: string;
 }
 
+/** Job-analysis points shown on the job step, in display order (R1.4). */
+export const JOB_INSIGHT_FIELDS = ["role", "industry", "atmosphere", "interview-format", "dress-code"] as const;
+export type JobInsightField = (typeof JOB_INSIGHT_FIELDS)[number];
+
+/**
+ * One job-analysis point. `value` and `evidence` are both null when the posting
+ * does not say; otherwise `evidence` is a verbatim excerpt of the posting.
+ */
+export interface JobInsightPoint {
+  id: JobInsightField;
+  value: string | null;
+  evidence: string | null;
+}
+
+/** Dress formality the posting suggests. Drives attire and hairstyle suggestions. */
+export const FORMALITY_LEVELS = ["formal", "business-casual", "smart-casual", "casual", "unknown"] as const;
+export type Formality = (typeof FORMALITY_LEVELS)[number];
+
+/** Who wrote the job analysis: the AI provider, or the deterministic rules fallback (R1.6). */
+export const JOB_ANALYSIS_SOURCES = ["ai", "rules"] as const;
+export type JobAnalysisSource = (typeof JOB_ANALYSIS_SOURCES)[number];
+
 export interface JobContext {
   summary: string;
+  source: JobAnalysisSource;
+  formality: Formality;
+  /** Exactly one point per `JOB_INSIGHT_FIELDS` entry, in that order. */
+  points: JobInsightPoint[];
+  /** Presentation cues from a fixed catalog, each with verbatim evidence. */
   cues: JobCue[];
+}
+
+/** Response of `POST /v1/job-analyses`. No image is involved. */
+export interface JobAnalysis {
+  generatedAt: string;
+  locale: Locale;
+  jobContext: JobContext;
+}
+
+/** JSON body fields for `POST /v1/job-analyses`. */
+export const JOB_ANALYSIS_REQUEST_FIELDS = {
+  jobDescription: "jobDescription",
+  /** Optional; "en" when absent. */
+  locale: "locale",
+} as const;
+
+/** IDs a recommendation may cite: catalog cues and job-analysis points that have evidence. */
+export function citableJobIds(context: JobContext): Set<string> {
+  return new Set([
+    ...context.cues.map((cue) => cue.id),
+    ...context.points.filter((point) => point.evidence !== null).map((point) => point.id),
+  ]);
 }
 
 /** Whether an observation is already fine or worth an optional adjustment. Never a score. */
@@ -47,6 +96,7 @@ export interface Recommendation {
   observationId: string | null;
   adjustment: string;
   rationale: string;
+  /** Cited catalog cue IDs or job-analysis point IDs (see `citableJobIds`). */
   cueIds: string[];
 }
 

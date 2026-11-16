@@ -11,8 +11,8 @@ import { CONSENT_VERSION, createConsentRecord, isConsentCurrent } from "./consen
 
 async function reachConsentStep(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Job description"), "Client-facing consultant, video interviews");
-  await user.click(screen.getByRole("button", { name: "Save job description" }));
-  await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+  await user.click(screen.getByRole("button", { name: "Analyze posting" }));
+  await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
   await user.click(await screen.findByRole("button", { name: "Use this photo" }));
   await screen.findByRole("heading", { level: 1, name: "Review how your photo is used" });
 }
@@ -124,7 +124,7 @@ describe("consent gate in the flow", () => {
     await user.click(screen.getByRole("button", { name: "Agree and analyze" }));
 
     await user.click(await screen.findByRole("button", { name: "Start over" }));
-    await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "other.jpg", "image/jpeg"));
+    await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "other.jpg", "image/jpeg"));
     await user.click(await screen.findByRole("button", { name: "Use this photo" }));
 
     expect(screen.getByRole("checkbox")).not.toBeChecked();
