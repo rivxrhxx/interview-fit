@@ -46,38 +46,42 @@ export function JobDescriptionForm({ initialText = "", onSubmit }: JobDescriptio
   const describedBy = [hintId, counterId, error ? errorId : null].filter(Boolean).join(" ");
 
   return (
-    <form className="job-form" onSubmit={handleSubmit} noValidate>
-      <label className="field-label" htmlFor={fieldId}>
-        Job description
-      </label>
-      <p className="field-hint" id={hintId}>
-        Paste the posting you are preparing for. It is treated as plain text and used only to tailor optional
-        suggestions.
-      </p>
-      <textarea
-        id={fieldId}
-        ref={fieldRef}
-        className="job-field"
-        rows={10}
-        value={text}
-        onChange={(event) => handleChange(event.target.value)}
-        aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
-        spellCheck
-      />
-      <div className="field-footer">
-        <p className="field-counter" id={counterId} data-over-limit={overLimit || undefined}>
-          {formatCount(length)} / {formatCount(JOB_DESCRIPTION_MAX_LENGTH)} characters
+    <form className="form" onSubmit={handleSubmit} noValidate>
+      <div className="field">
+        <label className="field-label" htmlFor={fieldId}>
+          Job description
+        </label>
+        <p className="field-hint" id={hintId}>
+          Paste the posting you are preparing for. It is treated as plain text and used only to tailor optional
+          suggestions.
         </p>
-        {error && (
-          <p className="field-error" id={errorId}>
-            {jobDescriptionErrorMessage(error)}
+        <textarea
+          id={fieldId}
+          ref={fieldRef}
+          className="job-field"
+          rows={9}
+          value={text}
+          onChange={(event) => handleChange(event.target.value)}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          spellCheck
+        />
+        <div className="field-footer">
+          {error && (
+            <p className="field-error" id={errorId}>
+              {jobDescriptionErrorMessage(error)}
+            </p>
+          )}
+          <p className="field-counter" id={counterId} data-over-limit={overLimit || undefined}>
+            {formatCount(length)} / {formatCount(JOB_DESCRIPTION_MAX_LENGTH)} characters
           </p>
-        )}
+        </div>
       </div>
-      <button type="submit" className="button button-primary">
-        Save job description
-      </button>
+      <div className="actions">
+        <button type="submit" className="button button-primary">
+          Save job description
+        </button>
+      </div>
     </form>
   );
 }

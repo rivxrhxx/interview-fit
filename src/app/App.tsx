@@ -105,7 +105,7 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
         <div className="step-stack">
           <AnalysisReview result={state.analysis.result} />
           <RecommendationList result={state.analysis.result} />
-          <div className="photo-actions">
+          <div className="actions">
             <button type="button" className="button button-primary" onClick={() => dispatch({ type: "TRY_ON_OPENED" })}>
               Preview interview attire
             </button>
@@ -116,7 +116,7 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
             >
               Create report
             </button>
-            <button type="button" className="button button-secondary" onClick={() => dispatch({ type: "START_OVER" })}>
+            <button type="button" className="button button-text" onClick={() => dispatch({ type: "START_OVER" })}>
               Start over
             </button>
           </div>

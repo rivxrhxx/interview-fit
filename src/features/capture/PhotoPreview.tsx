@@ -12,12 +12,9 @@ export function PhotoPreview({ image, onRemove, children }: PhotoPreviewProps) {
   const url = useObjectUrl(image.blob);
 
   return (
-    <section className="photo-preview" aria-label="Photo preview">
+    <section className="step-stack" aria-label="Photo preview">
       <div className="photo-frame">{url && <img src={url} alt="Selected photo preview" />}</div>
-      <p className="field-hint">
-        This copy has been re-encoded without location or camera metadata. It stays in memory on this device.
-      </p>
-      <div className="photo-actions">
+      <div className="actions">
         {children}
         <button type="button" className="button button-secondary" onClick={onRemove}>
           Remove photo

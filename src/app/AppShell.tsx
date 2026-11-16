@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import { STEP_META, describeStep, type FlowStep } from "./flow";
+import { FLOW_STEPS, STEP_META, describeStep, isProgressStep, type FlowStep } from "./flow";
 import { StepProgress } from "./StepProgress";
 
 interface AppShellProps {
@@ -28,22 +28,29 @@ export function AppShell({ step, notice, children }: AppShellProps) {
     mainRef.current?.focus();
   }
 
+  const meta = STEP_META[step];
+  const position = isProgressStep(step) ? FLOW_STEPS.indexOf(step) + 1 : null;
+
   return (
-    <div className="app-shell">
+    <div className="app">
       <a className="skip-link" href="#main-content" onClick={skipToMain}>
         Skip to main content
       </a>
-      <header className="app-header">
-        <p className="app-name">Interview Fit</p>
-        <p className="app-tagline">Optional, neutral presentation guidance for your next interview.</p>
+      <header className="topbar">
+        <p className="brand">Interview Fit</p>
+        <StepProgress current={step} />
       </header>
-      <StepProgress current={step} />
       <main id="main-content" ref={mainRef} tabIndex={-1} className="app-main">
+        {/* The live region below announces the step; this caption is visual only. */}
+        <p className="step-caption" aria-hidden="true">
+          {position ? `${position} of ${FLOW_STEPS.length} · ${meta.label}` : meta.label}
+        </p>
         <h1 ref={headingRef} tabIndex={-1}>
-          {STEP_META[step].heading}
+          {meta.heading}
         </h1>
-        {notice && <p className="notice">{notice}</p>}
-        {children}
+        <p className="step-description">{meta.description}</p>
+        {notice && <p className={step === "error" ? "notice notice-danger" : "notice"}>{notice}</p>}
+        <div className="step-body">{children}</div>
       </main>
       <p className="visually-hidden" role="status" aria-live="polite">
         {notice ? `${describeStep(step)}. ${notice}` : describeStep(step)}
