@@ -95,16 +95,18 @@ describe("consent gate in the flow", () => {
     expect(screen.getByLabelText("Job description")).toHaveValue("Client-facing consultant, video interviews");
   });
 
-  it("moves to analysis only after explicit agreement", async () => {
+  it("calls the upload adapter only after explicit agreement, never raw network APIs", async () => {
     const network = spyOnNetwork();
     const user = userEvent.setup();
-    renderApp();
+    const { adapters } = renderApp();
     await reachConsentStep(user);
 
+    expect(adapters.api.createAnalysisJob).not.toHaveBeenCalled();
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Agree and analyze" }));
 
-    expect(screen.getByRole("heading", { level: 1, name: "Analyzing presentation cues" })).toBeInTheDocument();
+    await vi.waitFor(() => expect(adapters.api.createAnalysisJob).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(adapters.api.createAnalysisJob).mock.calls[0][0].consentVersion).toBe(CONSENT_VERSION);
     network.expectNothingSent();
   });
 
@@ -115,8 +117,7 @@ describe("consent gate in the flow", () => {
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Agree and analyze" }));
 
-    await user.click(screen.getByRole("button", { name: "Cancel analysis" }));
-    await user.click(screen.getByRole("button", { name: "Remove photo" }));
+    await user.click(await screen.findByRole("button", { name: "Start over" }));
     await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "other.jpg", "image/jpeg"));
     await user.click(await screen.findByRole("button", { name: "Use this photo" }));
 

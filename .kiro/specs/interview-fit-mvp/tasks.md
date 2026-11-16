@@ -39,7 +39,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Requirements: R4.1, R4.2, R8.3
   - Verify: contract fixtures
 
-- [ ] 6.2 Implement first-party backend analysis job flow
+- [x] 6.2 Implement first-party backend analysis job flow
   - Requirements: R4.1, R4.3, R4.4
   - Tests first: timeout, cancel, rate limit, malformed provider response, cleanup
   - Verify: proxy integration suite

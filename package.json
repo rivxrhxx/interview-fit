@@ -7,7 +7,7 @@
     "dev": "vite",
     "proxy": "node --experimental-strip-types --disable-warning=ExperimentalWarning services/proxy/src/main.ts",
     "build": "tsc && vite build",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json && tsc -p tsconfig.integration.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:privacy": "vitest run privacy",

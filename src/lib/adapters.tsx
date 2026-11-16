@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { createHttpApiClient, resolveApiBaseUrl, type ApiClient } from "./api";
 import { browserCameraAdapter, type CameraAdapter } from "./media/camera";
 import { createImageAdapter, type ImageAdapter } from "./tauri";
 
@@ -6,10 +7,12 @@ import { createImageAdapter, type ImageAdapter } from "./tauri";
 export interface Adapters {
   image: ImageAdapter;
   camera: CameraAdapter;
+  api: ApiClient;
 }
 
 export function createDefaultAdapters(): Adapters {
-  return { image: createImageAdapter(), camera: browserCameraAdapter };
+  const baseUrl = resolveApiBaseUrl(import.meta.env.VITE_INTERVIEW_FIT_API_BASE_URL);
+  return { image: createImageAdapter(), camera: browserCameraAdapter, api: createHttpApiClient({ baseUrl }) };
 }
 
 const AdaptersContext = createContext<Adapters | null>(null);

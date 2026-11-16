@@ -23,6 +23,8 @@ export interface JobStore {
   get(id: string): AnalysisJobRecord | undefined;
   /** Test and diagnostics access that ignores expiry. */
   peek(id: string): AnalysisJobRecord | undefined;
+  /** Test and diagnostics access to every stored record. */
+  list(): AnalysisJobRecord[];
   size(): number;
   wipeImage(record: AnalysisJobRecord): void;
   sweep(): void;
@@ -59,6 +61,7 @@ export function createJobStore(now: () => number): JobStore {
       return record;
     },
     peek: (id) => jobs.get(id),
+    list: () => [...jobs.values()],
     size: () => jobs.size,
     wipeImage,
     sweep() {

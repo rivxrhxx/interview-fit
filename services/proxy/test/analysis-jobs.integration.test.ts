@@ -253,3 +253,21 @@ describe("transport hygiene", () => {
     expect(wrongMethod.headers.get("allow")).toBe("POST, OPTIONS");
   });
 });
+
+describe("metadata defense in depth", () => {
+  it("strips Exif from an upload before the provider sees it (R3.3)", async () => {
+    const provider = providerReturning(async () => NEUTRAL_OBSERVATIONS);
+    proxy = await startProxy(provider);
+    const marker = new TextEncoder().encode("Exif\0\0GPS 48.8584N");
+    const jpeg = syntheticJpeg();
+    const app1 = new Uint8Array([0xff, 0xe1, 0, marker.length + 2, ...marker]);
+    const withExif = new Uint8Array([...jpeg.subarray(0, 2), ...app1, ...jpeg.subarray(2)]);
+
+    expect((await postAnalysis(proxy, analysisForm({ image: withExif }))).status).toBe(202);
+    await waitFor(async () => (provider.calls.length ? true : undefined));
+
+    const received = new TextDecoder("latin1").decode(provider.calls[0].image.bytes);
+    expect(received).not.toContain("Exif");
+    expect(received).not.toContain("GPS 48.8584N");
+  });
+});
