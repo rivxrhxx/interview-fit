@@ -14,6 +14,7 @@ import {
 import { PhotoPicker, PhotoPreview } from "../features/capture";
 import { ConsentGate } from "../features/consent";
 import { RecommendationList } from "../features/recommendation";
+import { ReportStep } from "../features/report";
 import { TryOnStep, tryOnNotice } from "../features/try-on";
 import { useAdapters } from "../lib/adapters";
 import { JobDescriptionForm, JobDescriptionSummary } from "../features/job-posting";
@@ -108,6 +109,13 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
             <button type="button" className="button button-primary" onClick={() => dispatch({ type: "TRY_ON_OPENED" })}>
               Preview interview attire
             </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => dispatch({ type: "REPORT_REQUESTED", generatedAt: new Date().toISOString() })}
+            >
+              Create report
+            </button>
             <button type="button" className="button button-secondary" onClick={() => dispatch({ type: "START_OVER" })}>
               Start over
             </button>
@@ -133,6 +141,17 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
           onCancel={() => dispatch({ type: "TRY_ON_CANCELLED" })}
           onReset={() => dispatch({ type: "TRY_ON_RESET" })}
           onClose={() => dispatch({ type: "TRY_ON_CLOSED" })}
+          onContinue={() => dispatch({ type: "REPORT_REQUESTED", generatedAt: new Date().toISOString() })}
+        />
+      );
+    case "report-ready":
+      return (
+        <ReportStep
+          result={state.analysis.result}
+          tryOn={state.tryOn}
+          generatedAt={state.generatedAt}
+          onBack={() => dispatch({ type: "REPORT_CLOSED" })}
+          onStartOver={() => dispatch({ type: "START_OVER" })}
         />
       );
     case "error":
@@ -145,7 +164,9 @@ interface AppProps {
 }
 
 function analysisJobIdOf(state: FlowState) {
-  return state.step === "reviewed" || state.step === "trying-on" ? state.analysis.jobId : null;
+  return state.step === "reviewed" || state.step === "trying-on" || state.step === "report-ready"
+    ? state.analysis.jobId
+    : null;
 }
 
 /**

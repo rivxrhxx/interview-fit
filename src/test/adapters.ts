@@ -33,6 +33,7 @@ export function createMockAdapters(overrides: Partial<Adapters> = {}): Adapters 
       captureFrame: vi.fn(async () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" })),
     },
     api: mockApi(),
+    report: { save: vi.fn(async () => "saved" as const) },
     ...overrides,
   };
 }
