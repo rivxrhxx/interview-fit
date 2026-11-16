@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "TypeScript quality gate",
+  "description": "Ask Kiro to run the fast harness and TypeScript checks after TypeScript source changes.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["src/**/*.ts", "src/**/*.tsx"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run npm run verify:fast. Fix only errors caused by the edited files and report the exact commands and results."
+  }
+}

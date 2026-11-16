@@ -1,0 +1,1 @@
+Implement only task `${1}` from `.kiro/specs/interview-fit-mvp/tasks.md`. Read all steering and spec files first. Write failing tests before behavior, run the task-specific verification, and update the checkbox only after evidence passes. Do not add scope not required by the named task.

@@ -1,0 +1,1 @@
+Review `.kiro/specs/interview-fit-mvp/requirements.md`, `design.md`, and `tasks.md`. Find ambiguous, conflicting, untestable, missing privacy, and missing failure-path requirements. Report findings before editing. Do not weaken any rule in `.kiro/steering/security-privacy.md`.
