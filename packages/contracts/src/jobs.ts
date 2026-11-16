@@ -13,8 +13,12 @@ export type JobState = (typeof JOB_STATES)[number];
 
 export const TERMINAL_JOB_STATES: readonly JobState[] = ["succeeded", "failed", "cancelled"];
 
-/** Neutral capture-context categories. Appearance scoring categories do not exist by design (R5.3). */
-export const OBSERVATION_CATEGORIES = ["lighting", "framing", "background", "image-clarity", "attire"] as const;
+/**
+ * Neutral capture-context categories. Appearance scoring categories do not exist by
+ * design (R5.3). `skin-prep` carries optional lighting and grooming-prep tips only,
+ * never scores or condition names (R5.4).
+ */
+export const OBSERVATION_CATEGORIES = ["lighting", "framing", "background", "image-clarity", "skin-prep", "attire"] as const;
 export type ObservationCategory = (typeof OBSERVATION_CATEGORIES)[number];
 
 /** A job-context cue backed by an excerpt from the job description (R5.1). */

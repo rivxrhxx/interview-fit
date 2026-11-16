@@ -24,8 +24,12 @@ export interface FakeYouCamOptions {
   fileReply?: Reply;
   uploadReply?: Reply;
   createReply?: Reply;
-  /** Successive poll replies; the last one repeats. */
+  /** Successive poll replies for face-attr-analysis and cloth-v4; the last one repeats. */
   pollReplies?: Reply[];
+  /** Task creation reply for skin-analysis (defaults to success). */
+  skinCreateReply?: Reply;
+  /** Successive poll replies for skin-analysis; the last one repeats. */
+  skinPollReplies?: Reply[];
   /** Raw bytes (or failure) served at the result URL. */
   resultReply?: { status: number; bytes: Uint8Array; contentType?: string } | "network-error";
 }
@@ -49,6 +53,23 @@ export const FACE_ATTR_SUCCESS = {
   },
 };
 
+/** Skin-analysis JSON result with scores and mask URLs that must never leave the adapter. */
+export const SKIN_SUCCESS = {
+  status: 200,
+  data: {
+    task_status: "success",
+    error: null,
+    results: {
+      output: [
+        { type: "oiliness", ui_score: 61, raw_score: 48.25, mask_urls: ["https://results.youcam-storage.test/mask/oiliness.png?signature=sig-1"] },
+        { type: "moisture", ui_score: 80, raw_score: 72.5, mask_urls: ["https://results.youcam-storage.test/mask/moisture.png?signature=sig-2"] },
+        { type: "redness", ui_score: 85, raw_score: 77.75, mask_urls: [] },
+        { type: "texture", ui_score: 68, raw_score: 57.5, mask_urls: [] },
+      ],
+    },
+  },
+};
+
 export const RUNNING = { status: 200, data: { task_status: "running", error: null, results: null } };
 
 export function engineError(code: string) {
@@ -58,7 +79,9 @@ export function engineError(code: string) {
 export function fakeYouCam(options: FakeYouCamOptions = {}) {
   const requests: RecordedRequest[] = [];
   let polls = 0;
+  let skinPolls = 0;
   const pollReplies = options.pollReplies ?? [RUNNING, FACE_ATTR_SUCCESS];
+  const skinPollReplies = options.skinPollReplies ?? [SKIN_SUCCESS];
 
   function respond(reply: Reply): Response {
     if (reply === "network-error") throw new TypeError("fetch failed");
@@ -102,9 +125,15 @@ export function fakeYouCam(options: FakeYouCamOptions = {}) {
       );
     }
     if (method === "PUT" && url === FAKE_UPLOAD_URL) return respond(options.uploadReply ?? { status: 200 });
-    const tool = /\/s2s\/v2\.0\/task\/(face-attr-analysis|cloth-v4)(\/|$)/.exec(url)?.[1];
+    const tool = /\/s2s\/v2\.0\/task\/(face-attr-analysis|cloth-v4|skin-analysis)(\/|$)/.exec(url)?.[1];
+    const created = { status: 200, body: { status: 200, data: { task_id: FAKE_TASK_ID } } };
     if (method === "POST" && tool && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}`) {
-      return respond(options.createReply ?? { status: 200, body: { status: 200, data: { task_id: FAKE_TASK_ID } } });
+      return respond((tool === "skin-analysis" ? options.skinCreateReply : options.createReply) ?? created);
+    }
+    if (method === "GET" && tool === "skin-analysis" && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}/${FAKE_TASK_ID}`) {
+      const reply = skinPollReplies[Math.min(skinPolls, skinPollReplies.length - 1)];
+      skinPolls += 1;
+      return respond(reply === "network-error" ? reply : { status: (reply as { status: number }).status, body: reply });
     }
     if (method === "GET" && url === FAKE_RESULT_URL) {
       const reply = options.resultReply ?? { status: 200, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) };

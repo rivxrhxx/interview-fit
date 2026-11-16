@@ -2,12 +2,14 @@
 //!
 //! Every image is checked for size, signature, and declared dimensions before any
 //! pixel buffer is allocated, then decoded, rotated according to its Exif
-//! orientation, and re-encoded as a baseline JPEG. Re-encoding drops every
-//! metadata segment (Exif, GPS, XMP, IPTC, ICC, comments) from the output.
+//! orientation, scaled down so the long side is at most [`MAX_OUTPUT_LONG_SIDE`]
+//! pixels, and re-encoded as a baseline JPEG. Re-encoding drops every metadata
+//! segment (Exif, GPS, XMP, IPTC, ICC, comments) from the output.
 
 use std::io::Cursor;
 
 use image::codecs::jpeg::JpegEncoder;
+use image::imageops::FilterType;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
 use serde::Serialize;
 
@@ -16,6 +18,9 @@ pub const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 /// Maximum accepted pixel count: 16 megapixels.
 pub const MAX_IMAGE_PIXELS: u64 = 16_000_000;
 const OUTPUT_JPEG_QUALITY: u8 = 90;
+/// Long-side cap of the prepared photo (R3.3). The hairstyle try-on accepts at most
+/// 1024 px, and a 4:3 or 16:9 photo still keeps the 480 px short side skin analysis needs.
+pub const MAX_OUTPUT_LONG_SIDE: u32 = 1024;
 
 const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 const JPEG_SIGNATURE: &[u8] = &[0xFF, 0xD8, 0xFF];
@@ -90,6 +95,14 @@ pub fn prepare_image(bytes: &[u8]) -> Result<Vec<u8>, ImageError> {
     let orientation = decoder.orientation().map_err(|_| ImageError::invalid())?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(|_| ImageError::invalid())?;
     image.apply_orientation(orientation);
+    if image.width().max(image.height()) > MAX_OUTPUT_LONG_SIDE {
+        // Keeps the aspect ratio; smaller photos are never upscaled.
+        image = image.resize(
+            MAX_OUTPUT_LONG_SIDE,
+            MAX_OUTPUT_LONG_SIDE,
+            FilterType::Lanczos3,
+        );
+    }
 
     let rgb = image.to_rgb8();
     let mut jpeg = Vec::new();
@@ -272,6 +285,24 @@ mod tests {
     fn accepts_jpeg_input() {
         let jpeg = prepare_image(&jpeg_bytes(5, 3)).unwrap();
         assert_eq!(decoded_dimensions(&jpeg), (5, 3));
+    }
+
+    #[test]
+    fn scales_landscape_photos_to_a_1024_pixel_long_side() {
+        let jpeg = prepare_image(&jpeg_bytes(2048, 1536)).unwrap();
+        assert_eq!(decoded_dimensions(&jpeg), (1024, 768));
+    }
+
+    #[test]
+    fn scales_portrait_photos_and_keeps_the_aspect_ratio() {
+        let jpeg = prepare_image(&png_bytes(1080, 1920)).unwrap();
+        assert_eq!(decoded_dimensions(&jpeg), (576, 1024));
+    }
+
+    #[test]
+    fn never_upscales_small_photos() {
+        let jpeg = prepare_image(&jpeg_bytes(1024, 576)).unwrap();
+        assert_eq!(decoded_dimensions(&jpeg), (1024, 576));
     }
 
     #[test]

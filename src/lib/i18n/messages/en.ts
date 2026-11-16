@@ -159,17 +159,17 @@ export const en = {
         id: "consent-what",
         title: "What is sent",
         items: [
-          "The photo you just confirmed, re-encoded on this device without location or camera metadata.",
-          "The job description text you saved.",
-          "The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner when you cancel or start over.",
+          "The photo you just confirmed, re-encoded on this device at up to 1024 pixels on the long side, without location or camera metadata.",
+          "The job description text you saved, and the neutral observation sentences read from the photo (text).",
+          "The backend keeps a temporary copy of the photo for up to 15 minutes so you can preview a hairstyle, and deletes it sooner when you cancel or start over.",
         ],
       },
       {
         id: "consent-why",
         title: "Why",
         items: [
-          "To produce optional, neutral suggestions about lighting, framing, background, and attire context.",
-          "To preview one curated interview attire style if you choose to.",
+          "To produce optional, neutral suggestions about lighting, framing, background, attire, and grooming prep. Skin analysis is shown only as prep tips, without scores.",
+          "To preview one curated interview hairstyle if you choose to.",
         ],
       },
       {
@@ -177,15 +177,16 @@ export const en = {
         title: "Who receives it",
         items: [
           "The Interview Fit backend, operated for this app.",
-          "YouCam (Perfect Corp.), the image-analysis and try-on provider the backend uses on Interview Fit's behalf. Its own retention terms apply to its processing.",
+          "The photo: YouCam (Perfect Corp.), the image-analysis and hairstyle try-on provider the backend uses on Interview Fit's behalf. Its own retention terms apply to its processing.",
+          "The text: Anthropic (Claude), the AI provider that writes the job analysis and suggestions. It receives the posting and observation sentences only, never the photo.",
         ],
       },
       {
         id: "consent-never",
         title: "What Interview Fit never does",
         items: [
-          "Diagnose health conditions or score appearance or attractiveness.",
-          "Infer personality, emotion, or protected traits, or predict interview or hiring outcomes.",
+          "Diagnose health or skin conditions, show skin scores or skin age, or score appearance or attractiveness.",
+          "Guess traits such as gender from the photo to choose styles, infer personality, emotion, or protected traits, or predict interview or hiring outcomes.",
           "Keep your photo in app history. Results are saved only if you export them.",
         ],
       },
@@ -205,6 +206,7 @@ export const en = {
     framing: "Framing",
     background: "Background",
     "image-clarity": "Image clarity",
+    "skin-prep": "Skin prep",
     attire: "Attire",
   } as Record<ObservationCategory, string>,
   review: {

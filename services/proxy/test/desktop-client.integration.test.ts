@@ -40,6 +40,10 @@ describe("desktop client ↔ proxy", () => {
       "image-clarity",
       "framing",
       "lighting",
+      "skin-prep",
+      "skin-prep",
+      "skin-prep",
+      "skin-prep",
     ]);
     expect(outcome.result.observations[0].text).toContain("1280×720");
   });

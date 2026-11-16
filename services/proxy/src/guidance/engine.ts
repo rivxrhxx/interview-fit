@@ -11,7 +11,7 @@ import {
 } from "../../../../packages/contracts/src/index.ts";
 import { cuePhrase, type CueId } from "./jobCues.ts";
 
-const MAX_RECOMMENDATIONS = 6;
+const MAX_RECOMMENDATIONS = 8;
 
 interface Tip {
   adjustment: string;
@@ -29,6 +29,8 @@ interface Copy {
   join: (parts: string[]) => string;
   quote: (phrase: string, evidence: string) => string;
   tips: Partial<Record<ObservationCategory, Tip>>;
+  /** Skin-prep tips keyed by concern; each adjustable concern gets its own suggestion. */
+  prepTips: Record<string, Tip>;
   attire: Record<AttireKind, { adjustment: string; setting: string }>;
   /** Rationale for attire: what the posting says, then the setting. */
   attireRationale: (mention: string, setting: string) => string;
@@ -57,6 +59,24 @@ const COPY: Record<Locale, Copy> = {
       background: {
         adjustment: "Consider a tidy, uncluttered background or a plain wall behind you.",
         why: "a simple background keeps the focus on the conversation",
+      },
+    },
+    prepTips: {
+      oiliness: {
+        adjustment: "Consider blotting paper or a translucent powder just before the interview to reduce shine.",
+        why: "less shine keeps the picture even under bright light",
+      },
+      moisture: {
+        adjustment: "Consider a light moisturizer before the interview.",
+        why: "it helps the picture look even under strong light",
+      },
+      redness: {
+        adjustment: "Consider neutral white light or daylight from a window instead of warm-colored light.",
+        why: "neutral light shows colors more naturally on camera",
+      },
+      texture: {
+        adjustment: "Consider soft, diffused light from the front rather than strong light from the side.",
+        why: "diffused front light makes the picture look more even",
       },
     },
     attire: {
@@ -100,6 +120,24 @@ const COPY: Record<Locale, Copy> = {
       background: {
         adjustment: "정돈된 배경이나 단색 벽을 뒤에 두는 것을 고려해 보세요.",
         why: "단순한 배경은 대화에 집중하게 해 줘요",
+      },
+    },
+    prepTips: {
+      oiliness: {
+        adjustment: "면접 직전에 기름종이나 투명 파우더로 번들거림을 정리하는 것을 고려해 보세요.",
+        why: "번들거림이 적으면 밝은 조명 아래에서도 화면이 고르게 보여요",
+      },
+      moisture: {
+        adjustment: "면접 전에 가벼운 보습제를 바르는 것을 고려해 보세요.",
+        why: "강한 조명 아래에서도 화면이 고르게 보이는 데 도움이 돼요",
+      },
+      redness: {
+        adjustment: "따뜻한 색 조명 대신 흰색에 가까운 조명이나 창가의 자연광을 고려해 보세요.",
+        why: "중성적인 빛은 카메라에 색을 더 자연스럽게 담아요",
+      },
+      texture: {
+        adjustment: "옆에서 비추는 강한 빛보다 정면에서 부드럽게 퍼지는 빛을 고려해 보세요.",
+        why: "정면의 부드러운 빛은 화면을 더 고르게 보이게 해요",
       },
     },
     attire: {
@@ -169,8 +207,24 @@ export function suggestRules(context: JobContext, observations: Observation[], l
   const covered = new Set<ObservationCategory>();
 
   for (const observation of observations) {
+    if (observation.assessment !== "adjustable") continue;
+    if (observation.category === "skin-prep") {
+      // One optional tip per concern, chosen from the observation ID (obs_prep_<concern>).
+      const concern = observation.id.replace(/^obs_prep_/, "");
+      const prep = copy.prepTips[concern];
+      if (!prep) continue;
+      recommendations.push({
+        id: `rec_prep_${concern}`,
+        category: "skin-prep",
+        observationId: observation.id,
+        adjustment: prep.adjustment,
+        rationale: camera ? copy.cites(mention([camera]), prep.why) : copy.plain(prep.why),
+        cueIds: camera ? [camera.id] : [],
+      });
+      continue;
+    }
     const tip = copy.tips[observation.category];
-    if (observation.assessment !== "adjustable" || !tip || covered.has(observation.category)) continue;
+    if (!tip || covered.has(observation.category)) continue;
     covered.add(observation.category);
     recommendations.push({
       id: `rec_${observation.category.replace("-", "_")}`,

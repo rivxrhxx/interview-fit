@@ -44,10 +44,10 @@ All settings come from the backend environment. Never put provider credentials i
 
 ## YouCam data minimization
 
-YouCam's analysis tools are skin analysis (dermatological, excluded by the product rules) and the Face Attributes & Ratio Analyzer. The adapter uses `face-attr-analysis` because it returns a `face_quality` block (`has_face`, `area`, `frontal`, `lighting`, `faceangle`):
+The analysis runs two YouCam tools in parallel, each on its own upload (reusing one file ID across tools is not documented):
 
-- The tool requires at least one attribute feature, so the adapter requests only `hairColor`, the least sensitive option, and discards its value.
-- Only `face_quality` and the face-position and angle error codes are translated, into neutral lighting and framing observations. Face shape, ratios, colors, age, and gender are never read or returned.
+- `face-attr-analysis` for photo quality. The tool requires at least one attribute feature, so the adapter requests only `hairColor`, the least sensitive option, and discards its value. Only the `face_quality` block and the face-position and angle error codes become neutral lighting and framing observations. Face shape, ratios, colors, age, and gender are never read or returned.
+- `skin-analysis` (SD, `format: "json"`) for prep tips, with exactly four concerns: `oiliness`, `moisture`, `redness`, `texture` (the 1-4 concern price tier). Each `raw_score` (1-100, higher means less pronounced) becomes `ok` or `adjustable` (below 60) and is then discarded. Scores, skin age, skin type, and mask URLs never leave the adapter, and the text describes how light and the camera may render the photo without naming a condition. A framing or darkness error becomes one retake hint, and any other skin failure only drops the prep tips: it never fails the analysis.
 - Task creation is never retried, so a transient error cannot charge units twice. Only status reads are retried.
 - The API key is sent only to the configured API host, never to the pre-signed upload URL.
 - Provider file IDs, task IDs, result URLs, and messages stay inside the adapter.

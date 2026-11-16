@@ -90,7 +90,7 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
   - Tests first: missing key uses rules, timeout, refusal, malformed JSON, unknown IDs, policy violations, no image data or scores in the prompt, key redaction
   - Verify: `npm run verify:fast`
 
-- [ ] 12.4 Implement YouCam skin-prep tips and 1024 px JPEG preprocessing
+- [x] 12.4 Implement YouCam skin-prep tips and 1024 px JPEG preprocessing
   - Requirements: R3.3, R3.4, R5.4, R5.5
   - Tests first: exactly four concerns requested, scores never leave the backend, framing errors keep other observations, Korean and English text pass the policy, consent version change, Rust resize
   - Verify: `npm run verify:fast` and `npm run verify:rust`
