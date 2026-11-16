@@ -3,7 +3,7 @@ import { captureBasics } from "../captureBasics.ts";
 import { ProviderError, type AnalysisProvider } from "../types.ts";
 import { createYouCamClient } from "./client.ts";
 import type { YouCamConfig } from "./config.ts";
-import { FRAMING_ERRORS, INVALID_IMAGE_ERRORS, faceQualityObservations } from "./faceQuality.ts";
+import { INVALID_IMAGE_ERRORS, faceQualityObservations, framingErrorText } from "./faceQuality.ts";
 
 const TOOL = "face-attr-analysis";
 
@@ -22,19 +22,19 @@ export function createYouCamAnalysisProvider(options: {
   const client = createYouCamClient(options);
 
   return {
-    async analyze(image, signal) {
+    async analyze(image, signal, locale = "en") {
       const fileId = await client.uploadImage(image, signal);
       const taskId = await client.createTask(TOOL, { src_file_id: fileId, ...TASK_OPTIONS }, signal);
       const outcome = await client.waitForTask(TOOL, taskId, signal);
-      const basics = captureBasics(image);
+      const basics = captureBasics(image, locale);
 
       if (outcome.status === "error") {
-        const framing = FRAMING_ERRORS[outcome.code];
+        const framing = framingErrorText(outcome.code, locale);
         if (framing) return [...basics, { id: "obs_face_position", category: "framing", assessment: "adjustable", text: framing }];
         throw new ProviderError(INVALID_IMAGE_ERRORS.has(outcome.code) ? "invalid-image" : "unavailable");
       }
 
-      const quality = faceQualityObservations(outcome.results);
+      const quality = faceQualityObservations(outcome.results, locale);
       if (!quality) throw new ProviderError("malformed-response");
       return [...basics, ...quality];
     },

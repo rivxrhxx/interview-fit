@@ -4,6 +4,7 @@ import {
   passesContentPolicy,
   type AnalysisJobId,
   type ErrorCode,
+  type Locale,
 } from "../../../../packages/contracts/src/index.ts";
 import type { GuidanceEngine } from "../guidance.ts";
 import { newAnalysisJobId, newCorrelationId } from "../ids.ts";
@@ -33,7 +34,7 @@ export interface AnalysisJobsOptions {
 }
 
 export interface AnalysisJobs {
-  create(input: { jobDescription: string; image: Uint8Array; imageInfo: ImageInfo }): AnalysisJobRecord;
+  create(input: { jobDescription: string; image: Uint8Array; imageInfo: ImageInfo; locale?: Locale }): AnalysisJobRecord;
   cancel(id: AnalysisJobId): AnalysisJobRecord | undefined;
 }
 
@@ -89,7 +90,7 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
       const imageInfo = record.imageInfo;
       if (!image || !imageInfo) throw new ProviderError("invalid-image");
       const raw = await withDeadline(
-        (signal) => provider.analyze({ bytes: image, ...imageInfo }, signal),
+        (signal) => provider.analyze({ bytes: image, ...imageInfo }, signal, record.locale),
         controller,
         options.providerTimeoutMs,
       );
@@ -100,8 +101,14 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
       if (observations.length < parsed.length) {
         logger.log({ level: "warn", event: "policy_blocked_observations", count: parsed.length - observations.length });
       }
-      const { jobContext, recommendations } = guidance.build(record.jobDescription ?? "", observations);
-      record.result = { generatedAt: new Date(now()).toISOString(), jobContext, observations, recommendations };
+      const { jobContext, recommendations } = guidance.build(record.jobDescription ?? "", observations, record.locale);
+      record.result = {
+        generatedAt: new Date(now()).toISOString(),
+        locale: record.locale,
+        jobContext,
+        observations,
+        recommendations,
+      };
       finish(record, "succeeded", null);
     } catch (error) {
       if (record.state !== "processing") return;
@@ -110,7 +117,7 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
   }
 
   return {
-    create({ jobDescription, image, imageInfo }) {
+    create({ jobDescription, image, imageInfo, locale = "en" }) {
       const createdAt = now();
       const record: AnalysisJobRecord = {
         id: newAnalysisJobId() as AnalysisJobId,
@@ -118,6 +125,7 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
         createdAt,
         expiresAt: createdAt + options.jobTtlMs,
         correlationId: newCorrelationId(),
+        locale,
         jobDescription,
         image,
         imageInfo,

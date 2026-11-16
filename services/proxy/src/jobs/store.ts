@@ -1,4 +1,4 @@
-import type { AnalysisJobId, AnalysisResult, ErrorCode, JobState } from "../../../../packages/contracts/src/index.ts";
+import type { AnalysisJobId, AnalysisResult, ErrorCode, JobState, Locale } from "../../../../packages/contracts/src/index.ts";
 import type { ImageInfo } from "../imageInspect.ts";
 
 export interface AnalysisJobRecord {
@@ -7,6 +7,8 @@ export interface AnalysisJobRecord {
   createdAt: number;
   expiresAt: number;
   correlationId: string;
+  /** Language for generated text in this job's result. */
+  locale: Locale;
   /** Untrusted job text; cleared as soon as processing ends. */
   jobDescription: string | null;
   /** Temporary normalized image; zeroed and cleared on failure, cancellation, or expiry. */
