@@ -134,7 +134,7 @@ From an external review before submission.
   - Tests first: GET after DELETE returns no result; try-on refused
   - Verify: `npm run verify:fast`
 
-- [ ] 13.6 Keep the created hairstyle preview in the report after the try-on screen closes
+- [x] 13.6 Keep the created hairstyle preview in the report after the try-on screen closes
   - Requirements: R7.1, R7.3
   - Tests first: close, reset, failed retry, and report back-and-forth keep the created style; start over clears it
   - Verify: `npm run verify:fast`

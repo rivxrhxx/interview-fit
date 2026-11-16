@@ -153,6 +153,20 @@ describe("virtual try-on step", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps a created preview in the report after going back to guidance (R7.3)", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await openTryOn(user);
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
+    await screen.findByRole("img", { name: "Neat updo preview" });
+
+    await user.click(screen.getByRole("button", { name: "Back to guidance" }));
+    await user.click(await screen.findByRole("button", { name: "Create report" }));
+
+    expect(await screen.findByText(/A neat updo hairstyle preview was created during this session/)).toBeInTheDocument();
+    expect(screen.queryByText("No hairstyle preview was created.")).not.toBeInTheDocument();
+  });
+
   it("explains an unsuitable photo and lets the user return to guidance", async () => {
     const api = mockApi({ createTryOnJob: vi.fn(async () => Promise.reject(new ApiRequestError("IMAGE_UNSUITABLE"))) });
     const user = userEvent.setup();
