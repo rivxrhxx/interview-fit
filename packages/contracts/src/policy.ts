@@ -18,15 +18,15 @@ const RULES: ReadonlyArray<[PolicyCategory, RegExp[]]> = [
   [
     "protected-trait",
     [
-      /\b(rac(e|es|ial)|ethnic\w*|skin (tone|colou?r)|religio\w*|gender\w*|sex|sexual\w*|male|female|wom[ae]n|men|man|girl|boy|disab\w*|pregnan\w*|nationality|age|ages|aged|years old|\d{2}s|young\w*|elderly|old|older)\b/i,
-      /(인종|민족|피부\s*(톤|색)|종교|성별|남성|여성|남자|여자|장애|임신|국적|나이|연령|젊|늙|노인|\d+\s*세|\d+대)/,
+      /\b(rac(e|es|ial)|ethnic\w*|skin (tone|colou?r)|religio\w*|gender\w*|sex|sexual\w*|male|female|wom[ae]n|men|man|girl|boy|feminine|masculine|lad(y|ies)|gentlem[ae]n|he|she|his|her|hers|disab\w*|pregnan\w*|nationality|age|ages|aged|years old|\d{2}s|young\w*|elderly|old|older)\b/i,
+      /(인종|민족|피부\s*(톤|색)|종교|성별|남성|여성|남자|여자|숙녀|젠틀맨|장애|임신|국적|나이|연령|젊|늙|노인|\d+\s*세|\d+대)/,
     ],
   ],
   [
     "medical",
     [
-      /\b(acne|wrinkl\w*|blemish\w*|rosacea|eczema|psoriasis|skin|pores?|dark circles|dermatolog\w*|diagnos\w*|disease\w*|illness\w*|sick\w*|symptom\w*|medical\w*|health\w*|tired|unwell|weight|overweight|obes\w*|bmi)\b/i,
-      /(여드름|주름|잡티|기미|피부|모공|다크서클|진단|질환|질병|증상|의학|의료|건강|피곤|체중|비만)/,
+      /\b(acne|wrinkl\w*|blemish\w*|rosacea|eczema|psoriasis|skin|pores?|dark circles|under-?eyes?|spots?|pimples?|breakouts?|blackheads?|scars?|redness|oily|complexion|dermatolog\w*|diagnos\w*|disease\w*|illness\w*|sick\w*|symptom\w*|medical\w*|health\w*|tired|unwell|weight|overweight|obes\w*|bmi)\b/i,
+      /(여드름|주름|잡티|기미|피부|모공|다크서클|홍조|트러블(?!\s*슈팅)|각질|피지|뾰루지|흉터|진단|질환|질병|증상|의학|의료|건강|피곤|체중|비만)/,
     ],
   ],
   [

@@ -38,14 +38,14 @@ All settings come from the backend environment. Never put provider credentials i
 | `YOUCAM_STORAGE_HOSTS` | (none) | Optional comma-separated host suffixes allowed for pre-signed upload and result URLs. Set it in production once the provider's storage hosts are known |
 | `ANTHROPIC_API_KEY` | (none) | Optional. Enables Claude for the job analysis and suggestions. Without it, the deterministic rules engine is used |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Claude model for both calls |
-| `ANTHROPIC_TIMEOUT_MS` | `25000` | Per-call timeout; on timeout the rules engine answers instead |
+| `ANTHROPIC_TIMEOUT_MS` | `20000` | SDK request timeout; the advisor's per-call budgets also apply, and on timeout the rules engine answers instead |
 
 ## YouCam data minimization
 
 The analysis runs two YouCam tools in parallel, each on its own upload (reusing one file ID across tools is not documented):
 
 - `face-attr-analysis` for photo quality. The tool requires at least one attribute feature, so the adapter requests only `hairColor`, the least sensitive option, and discards its value. Only the `face_quality` block and the face-position and angle error codes become neutral lighting and framing observations. Face shape, ratios, colors, age, and gender are never read or returned.
-- `skin-analysis` (SD, `format: "json"`) for prep tips, with exactly four concerns: `oiliness`, `moisture`, `redness`, `texture` (the 1-4 concern price tier). Each `raw_score` (1-100, higher means less pronounced) becomes `ok` or `adjustable` (below 60) and is then discarded. Scores, skin age, skin type, and mask URLs never leave the adapter, and the text describes how light and the camera may render the photo without naming a condition. A framing or darkness error becomes one retake hint, and any other skin failure only drops the prep tips: it never fails the analysis.
+- `skin-analysis` (SD, `format: "json"`) for prep tips, with exactly four concerns: `oiliness`, `moisture`, `redness`, `texture` (the 1-4 concern price tier). Each `raw_score` (1-100, higher means less pronounced) becomes `ok` or `adjustable` (below 60) and is then discarded. Scores, skin age, skin type, and mask URLs never leave the adapter, and the text describes how light and the camera may render the photo without naming a condition. A framing or darkness error becomes one retake hint, and any other skin failure only drops the prep tips: it never fails the analysis. Once photo quality is in, a skin task still running after 10 seconds is stopped and skipped.
 - Task creation is never retried, so a transient error cannot charge units twice. Only status reads are retried.
 - The API key is sent only to the configured API host, never to the pre-signed upload URL.
 - Provider file IDs, task IDs, result URLs, and messages stay inside the adapter.
@@ -54,10 +54,12 @@ The analysis runs two YouCam tools in parallel, each on its own upload (reusing 
 
 `POST /v1/job-analyses` takes `{ jobDescription, locale }` as JSON and returns role, industry, atmosphere, interview format, and dress code, each with a verbatim quote from the posting or marked as not stated, plus a suggested dress formality. No image is involved, so no consent version is required; the desktop shows a notice before sending.
 
-- With `ANTHROPIC_API_KEY`, Claude writes the analysis and the suggestions through the official `@anthropic-ai/sdk` with structured JSON output, low effort, and the server-side refusal fallback. The posting is wrapped in `<job_posting>` delimiters as untrusted data.
-- Claude sees text only: the posting for the analysis, then the checked analysis and neutral observation text for the suggestions. Image bytes, provider scores, and face attributes are never sent.
-- Every AI answer goes through the same checks as the rules engine: quotes must appear verbatim in the posting, all text must pass the content policy, and suggestions must cite known cue, point, or observation IDs. Anything that fails is dropped, and an outage, refusal, timeout, or unusable answer falls back to the rules engine. The result says which one answered (`source: "ai"` or `"rules"`).
-- Analyses are cached in memory for `JOB_TTL_MS`, keyed by a SHA-256 hash of the text and locale, so the photo analysis reuses the one the user saw without a second AI call.
+- With `ANTHROPIC_API_KEY`, Claude reads the posting through the official `@anthropic-ai/sdk` with structured JSON output, low effort, and the server-side refusal fallback. The posting is wrapped in `<job_posting>` delimiters as untrusted data.
+- For the job analysis, Claude can only choose catalog entries (industry, atmosphere, interview format, dress code) with a quote, plus a job title copied from the posting. Its findings only fill fields the keyword rules left empty and never override them. Quotes must appear verbatim, have at least two letters, and contain no links, e-mail addresses, or phone numbers. Displayed values are always catalog labels or the verbatim title, the summary is always rebuilt from the surviving points, and the dress formality is derived from the surviving catalog entries. No free AI text reaches the screen.
+- For suggestions, Claude sees the checked analysis and neutral observation text only: never the posting again, image bytes, provider scores, or face attributes. Its suggestions must pass the content policy and cite known cue, point, or observation IDs. Skin-prep and hair wording always comes from the reviewed templates, and a prep tip may only answer a skin-prep observation marked adjustable.
+- Each AI call has its own time budget (20 s for the analysis; for suggestions, at most 15 s and never past the photo job's deadline) and no SDK retries. A timeout, outage, refusal, or unusable answer falls back to the rules engine; only the caller's own cancellation stops a request. The result says which one answered (`source: "ai"` or `"rules"`).
+- Analyses are cached in memory for at least an hour, keyed by a SHA-256 hash of the text and locale, so the photo analysis reuses the one the user saw. The shared work runs independently of any single request, so one client disconnecting never fails another.
+- Text analyses and style thumbnails have their own rate-limit buckets (cached analyses are free), so they never use up photo uploads or try-ons.
 - Logs record only the operation, HTTP status, stop reason, duration, and a coarse failure kind. Prompts, replies, and job text are never logged.
 
 ## Cancellation and retention

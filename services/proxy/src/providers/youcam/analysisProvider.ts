@@ -47,12 +47,18 @@ async function skinPrep(
   }
 }
 
+/** How long skin prep may keep running after the required photo-quality result is in (R5.5). */
+const DEFAULT_SKIN_GRACE_MS = 10_000;
+const SKIN_SLOW = Symbol("skin-slow");
+
 export function createYouCamAnalysisProvider(options: {
   config: YouCamConfig;
   logger: Logger;
   fetch?: typeof fetch;
+  skinGraceMs?: number;
 }): AnalysisProvider {
   const client = createYouCamClient(options);
+  const skinGraceMs = options.skinGraceMs ?? DEFAULT_SKIN_GRACE_MS;
 
   async function faceQuality(image: ProviderImage, signal: AbortSignal, locale: Locale): Promise<Observation[]> {
     const fileId = await client.uploadImage(image, signal);
@@ -72,18 +78,33 @@ export function createYouCamAnalysisProvider(options: {
     async analyze(image, signal, locale = "en") {
       // When the required photo-quality task fails, stop the optional skin task too.
       const local = new AbortController();
+      const skin = new AbortController();
       const forward = () => local.abort(signal.reason);
+      const stopSkin = () => skin.abort(local.signal.reason);
       if (signal.aborted) forward();
       signal.addEventListener("abort", forward, { once: true });
-      const prep = skinPrep(client, image, local.signal, locale, options.logger);
+      local.signal.addEventListener("abort", stopSkin, { once: true });
+      const prep = skinPrep(client, image, skin.signal, locale, options.logger);
       prep.catch(() => undefined);
+      let grace: ReturnType<typeof setTimeout> | undefined;
       try {
         const quality = await faceQuality(image, local.signal, locale);
-        return [...captureBasics(image, locale), ...quality, ...(await prep)];
+        // A slow skin task never holds up or fails the analysis; it is stopped and skipped.
+        const extra = await Promise.race([
+          prep,
+          new Promise<typeof SKIN_SLOW>((resolve) => (grace = setTimeout(() => resolve(SKIN_SLOW), skinGraceMs))),
+        ]);
+        if (extra === SKIN_SLOW) {
+          skin.abort(new Error("skin prep too slow"));
+          options.logger.log({ level: "info", event: "skin_prep_skipped", reason: "slow" });
+          return [...captureBasics(image, locale), ...quality];
+        }
+        return [...captureBasics(image, locale), ...quality, ...extra];
       } catch (error) {
         local.abort(error);
         throw error;
       } finally {
+        clearTimeout(grace);
         signal.removeEventListener("abort", forward);
       }
     },

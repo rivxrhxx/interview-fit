@@ -4,7 +4,7 @@
 // like rules text; only known IDs survive), R1.3 (posting fenced as data), and secret
 // handling. No request ever reaches the network: the SDK runs against a fake fetch.
 import { inspect } from "node:util";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { passesContentPolicy, type Observation } from "../../../packages/contracts/src/index.ts";
 import { createClaudeWriter, loadClaudeConfig, type ClaudeConfig } from "../src/ai/claude.ts";
 import { createAdvisor } from "../src/guidance.ts";
@@ -55,16 +55,13 @@ const json = (body: unknown, status = 200) =>
 
 const CONFIG: ClaudeConfig = { apiKey: new Secret(KEY), model: "claude-opus-5-5", timeoutMs: 2_000, maxRetries: 0 };
 
+/** The model returns catalog ids and verbatim quotes only; no free text reaches the user. */
 const JOB_REPLY = {
-  summary: "A senior consulting role at a financial advisory firm with video interviews.",
-  formality: "formal",
-  points: {
-    role: { value: "Senior consultant", quote: "Senior consultant" },
-    industry: { value: "Financial advisory", quote: "financial advisory firm" },
-    atmosphere: { value: null, quote: null },
-    interview_format: { value: "Video interview", quote: "Interviews are held over video (Zoom)" },
-    dress_code: { value: null, quote: null },
-  },
+  role: { value: "Senior consultant", quote: "Senior consultant" },
+  industry: { id: "finance", quote: "financial advisory firm" },
+  atmosphere: { id: null, quote: null },
+  interview_format: { id: "video", quote: "Interviews are held over video (Zoom)" },
+  dress_code: { id: null, quote: null },
 };
 
 function writer(reply: (call: Call) => Response | Promise<Response>) {
@@ -105,6 +102,11 @@ describe("job analysis request", () => {
       fallbacks: "default",
       output_config: { effort: "low", format: { type: "json_schema" } },
     });
+    const schema = (call.body.output_config as { format: { schema: { properties: Record<string, { properties: Record<string, unknown> }> } } }).format.schema;
+    expect(Object.keys(schema.properties).sort()).toEqual(["atmosphere", "dress_code", "industry", "interview_format", "role"]);
+    expect(JSON.stringify(schema.properties.industry)).toContain('"finance"');
+    expect(schema.properties).not.toHaveProperty("summary");
+    expect(call.body.max_tokens).toBeGreaterThan(0);
     const content = (call.body.messages as Array<{ content: string }>)[0].content;
     expect(content.match(/<job_posting>/g)).toHaveLength(1);
     expect(content.match(/<\/job_posting>/g)).toHaveLength(1);
@@ -112,24 +114,18 @@ describe("job analysis request", () => {
     expect(String(call.body.system)).toMatch(/untrusted data/);
   });
 
-  it("maps the reply to a job analysis labeled as AI, with rule-based cues", async () => {
+  it("maps the reply to catalog findings and a verbatim title", async () => {
     const { ai } = writer(() => json(message(JOB_REPLY)));
 
-    const context = await ai.analyzeJob(POSTING, "en", signal());
+    const facts = await ai.analyzeJob(POSTING, "en", signal());
 
-    expect(context.source).toBe("ai");
-    expect(context.formality).toBe("formal");
-    expect(context.points.map((point) => point.id)).toEqual(["role", "industry", "atmosphere", "interview-format", "dress-code"]);
-    expect(context.points[1]).toEqual({ id: "industry", value: "Financial advisory", evidence: "financial advisory firm" });
-    expect(context.cues.map((cue) => cue.id)).toEqual(expect.arrayContaining(["formal-industry", "video-interview"]));
-  });
-
-  it("asks for Korean values when the app is in Korean", async () => {
-    const { ai, calls } = writer(() => json(message(JOB_REPLY)));
-
-    await ai.analyzeJob(POSTING, "ko", signal());
-
-    expect(String(calls[0].body.system)).toMatch(/Korean/);
+    expect(facts).toEqual({
+      role: { title: "Senior consultant" },
+      industry: { id: "finance", evidence: "financial advisory firm" },
+      atmosphere: null,
+      interviewFormat: { id: "video", evidence: "Interviews are held over video (Zoom)" },
+      dressCode: null,
+    });
   });
 });
 
@@ -182,7 +178,23 @@ describe("fallback to rules (R1.6)", () => {
     expect(JSON.stringify(logger.entries)).not.toContain(KEY);
   });
 
-  it("stops without falling back when the user cancels", async () => {
+  it("rejects only the cancelling caller of a job analysis; the shared result still arrives", async () => {
+    let release: (() => void) | undefined;
+    const { ai, logger } = writer(() => new Promise<Response>((resolve) => (release = () => resolve(json(message(JOB_REPLY))))));
+    const advisor = createAdvisor({ ai, logger, now: () => 0, cacheTtlMs: 1_000 });
+    const controller = new AbortController();
+
+    const cancelled = advisor.analyzeJob(POSTING, "en", controller.signal);
+    controller.abort(new Error("cancelled"));
+    await expect(cancelled).rejects.toThrow("cancelled");
+    const waiting = advisor.analyzeJob(POSTING, "en", signal());
+    await vi.waitFor(() => expect(release).toBeDefined());
+    release!();
+
+    await expect(waiting).resolves.toMatchObject({ source: "ai" });
+  });
+
+  it("stops suggestions without falling back when the user cancels", async () => {
     const controller = new AbortController();
     const { ai, logger } = writer(
       () =>
@@ -191,25 +203,39 @@ describe("fallback to rules (R1.6)", () => {
         }),
     );
     const advisor = createAdvisor({ ai, logger, now: () => 0, cacheTtlMs: 1_000 });
+    const jobContext = createAdvisor({ logger: memoryLogger(), now: () => 0, cacheTtlMs: 1_000 }).analyzeJob(POSTING, "en", signal());
 
-    const pending = advisor.analyzeJob(POSTING, "en", controller.signal);
+    const pending = advisor.suggest({ jobDescription: POSTING, jobContext: await jobContext, observations: OBSERVATIONS, locale: "en" }, controller.signal);
     controller.abort(new Error("cancelled"));
 
     await expect(pending).rejects.toThrow("cancelled");
     expect(logger.entries.some((entry) => entry.event === "ai_fallback")).toBe(false);
   });
+
+  it("answers with the rules when suggestions run out of time (review finding 2)", async () => {
+    const { ai, logger } = writer(
+      (call) =>
+        new Promise<Response>((_resolve, reject) => {
+          void call;
+          setTimeout(() => reject(new DOMException("timed out", "TimeoutError")), 1_000);
+        }),
+    );
+    const advisor = createAdvisor({ ai, logger, now: () => 0, cacheTtlMs: 1_000 });
+    const jobContext = await createAdvisor({ logger: memoryLogger(), now: () => 0, cacheTtlMs: 1_000 }).analyzeJob(POSTING, "en", signal());
+
+    const kept = await advisor.suggest({ jobDescription: POSTING, jobContext, observations: OBSERVATIONS, locale: "en" }, signal(), 30);
+
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.every((rec) => !rec.id.startsWith("rec_ai_"))).toBe(true);
+  });
 });
 
 describe("AI output is checked like rules output (R5.3, R5.6)", () => {
-  it("drops invented quotes and prohibited wording from the job analysis", async () => {
+  it("drops invented quotes and unverifiable titles from the job analysis", async () => {
     const reply = {
       ...JOB_REPLY,
-      summary: "An attractive, young team that will hire you.",
-      points: {
-        ...JOB_REPLY.points,
-        atmosphere: { value: "Prestigious", quote: "a prestigious global leader" },
-        role: { value: "Young senior consultant", quote: "Senior consultant" },
-      },
+      atmosphere: { id: "formal", quote: "a prestigious global leader" },
+      role: { value: "Young senior consultant", quote: "Young senior consultant" },
     };
     const { ai, logger } = writer(() => json(message(reply)));
     const advisor = createAdvisor({ ai, logger, now: () => 0, cacheTtlMs: 1_000 });
@@ -218,9 +244,32 @@ describe("AI output is checked like rules output (R5.3, R5.6)", () => {
 
     expect(context.source).toBe("ai");
     expect(context.points.find((point) => point.id === "atmosphere")).toEqual({ id: "atmosphere", value: null, evidence: null });
-    expect(context.points.find((point) => point.id === "role")).toEqual({ id: "role", value: null, evidence: null });
+    expect(context.points.find((point) => point.id === "role")?.value).toBe("Senior consultant");
     expect(passesContentPolicy(context.summary)).toBe(true);
-    expect(context.summary).not.toMatch(/attractive|hire/);
+    expect(context.summary).not.toMatch(/young|prestigious/i);
+  });
+
+  it("keeps skin-prep and hair wording on the reviewed templates (review finding 5)", async () => {
+    const prep: Observation[] = [
+      ...OBSERVATIONS,
+      { id: "obs_prep_oiliness", category: "skin-prep", assessment: "adjustable", text: "Under bright light, some shine may show on the forehead and nose." },
+    ];
+    const reply = {
+      suggestions: [
+        { category: "skin-prep", observation_id: "obs_prep_oiliness", adjustment: "Consider covering redness with concealer.", rationale: "x", cite_ids: [] },
+        { category: "hair", observation_id: null, adjustment: "Consider a feminine updo.", rationale: "Common in finance.", cite_ids: ["industry"] },
+        { category: "lighting", observation_id: "obs_lighting", adjustment: "Consider a soft lamp in front of you.", rationale: "The interview is on video, where even light helps.", cite_ids: ["video-interview"] },
+      ],
+    };
+    const { ai, logger } = writer((call) => json(message(JSON.stringify(call.body.messages).includes("<job_posting>") ? JOB_REPLY : reply)));
+    const advisor = createAdvisor({ ai, logger, now: () => 0, cacheTtlMs: 1_000 });
+    const jobContext = await advisor.analyzeJob(POSTING, "en", signal());
+
+    const kept = await advisor.suggest({ jobDescription: POSTING, jobContext, observations: prep, locale: "en" }, signal());
+
+    expect(kept.find((rec) => rec.category === "skin-prep")?.id).toBe("rec_prep_oiliness");
+    expect(kept.find((rec) => rec.category === "hair")?.id).toBe("rec_hair");
+    expect(JSON.stringify(kept)).not.toMatch(/concealer|feminine/);
   });
 
   it("keeps only policy-compliant AI suggestions that cite known IDs, and re-assigns their IDs", async () => {
@@ -239,9 +288,12 @@ describe("AI output is checked like rules output (R5.3, R5.6)", () => {
 
     const kept = await advisor.suggest({ jobDescription: POSTING, jobContext, observations: OBSERVATIONS, locale: "en" }, signal());
 
-    expect(kept.map((rec) => rec.adjustment)).toEqual(["Consider a soft lamp in front of you.", "Consider a structured blazer."]);
-    expect(kept.map((rec) => rec.id)).toEqual(["rec_ai_1", "rec_ai_4"]);
-    expect(kept[1].cueIds).toEqual(["industry"]);
+    const fromAi = kept.filter((rec) => rec.id.startsWith("rec_ai_"));
+    expect(fromAi.map((rec) => rec.adjustment)).toEqual(["Consider a soft lamp in front of you.", "Consider a structured blazer."]);
+    expect(fromAi.map((rec) => rec.id)).toEqual(["rec_ai_1", "rec_ai_4"]);
+    expect(fromAi[1].cueIds).toEqual(["industry"]);
+    // Hair wording comes from the reviewed template.
+    expect(kept.some((rec) => rec.id === "rec_hair")).toBe(true);
   });
 
   it("falls back to rules when no AI suggestion survives the checks", async () => {

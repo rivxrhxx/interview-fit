@@ -208,23 +208,121 @@ function findEntry(text: string, catalog: readonly CatalogEntry[]): { entry: Cat
   return best;
 }
 
-function findRole(text: string): JobInsightPoint {
+/** A catalog finding: which entry, and the verbatim excerpt that supports it. */
+export interface Finding {
+  id: string;
+  evidence: string;
+}
+
+/**
+ * Structured job facts. Values shown to the user are always catalog labels or a
+ * verbatim job title, never free text, so neither a posting nor a model can put
+ * arbitrary sentences on screen (R1.3, R1.4).
+ */
+export interface JobFacts {
+  role: { title: string } | null;
+  industry: Finding | null;
+  atmosphere: Finding | null;
+  interviewFormat: Finding | null;
+  dressCode: Finding | null;
+}
+
+type CatalogField = Exclude<keyof JobFacts, "role">;
+
+const CATALOGS: Record<CatalogField, readonly CatalogEntry[]> = {
+  industry: INDUSTRIES,
+  atmosphere: ATMOSPHERES,
+  interviewFormat: INTERVIEW_FORMATS,
+  dressCode: DRESS_CODES,
+};
+
+/** Allowed catalog IDs per field, for the AI's structured output schema. */
+export const JOB_CATALOG_IDS: Record<CatalogField, string[]> = {
+  industry: INDUSTRIES.map((entry) => entry.id),
+  atmosphere: ATMOSPHERES.map((entry) => entry.id),
+  interviewFormat: INTERVIEW_FORMATS.map((entry) => entry.id),
+  dressCode: DRESS_CODES.map((entry) => entry.id),
+};
+
+const POINT_FIELDS: ReadonlyArray<[JobInsightField, CatalogField]> = [
+  ["industry", "industry"],
+  ["atmosphere", "atmosphere"],
+  ["interview-format", "interviewFormat"],
+  ["dress-code", "dressCode"],
+];
+
+function findRole(text: string): JobFacts["role"] {
   const match = earliest(text, ROLE_PATTERNS);
-  if (!match) return notStated("role");
+  if (!match) return null;
   // Drop leading sentence words; what remains is still a verbatim slice of the posting.
   const words = match.text.split(/(\s+)/);
   let start = 0;
   while (start < words.length - 1 && (words[start].trim() === "" || ROLE_STOPWORDS.has(words[start].toLowerCase()))) start += 1;
   const title = words.slice(start).join("").trim();
-  return title ? { id: "role", value: title, evidence: title } : notStated("role");
+  return title ? { title } : null;
 }
 
 function notStated(id: JobInsightField): JobInsightPoint {
   return { id, value: null, evidence: null };
 }
 
-function catalogPoint(id: JobInsightField, found: { entry: CatalogEntry; match: Match } | null, locale: Locale): JobInsightPoint {
-  return found ? { id, value: found.entry.label[locale], evidence: found.match.text } : notStated(id);
+/** Keyword facts found deterministically in the posting. */
+export function findJobFacts(jobDescription: string): JobFacts {
+  const finding = (field: CatalogField): Finding | null => {
+    const found = findEntry(jobDescription, CATALOGS[field]);
+    return found ? { id: found.entry.id, evidence: found.match.text } : null;
+  };
+  return {
+    role: findRole(jobDescription),
+    industry: finding("industry"),
+    atmosphere: finding("atmosphere"),
+    interviewFormat: finding("interviewFormat"),
+    dressCode: finding("dressCode"),
+  };
+}
+
+const MAX_ROLE_WORDS = 6;
+
+/**
+ * Adds AI findings only where the keyword rules found nothing: the AI never
+ * overrides a rule-based finding. AI findings must name a catalog entry, and the
+ * role must be a short title copied verbatim from the posting.
+ */
+export function mergeFacts(rules: JobFacts, ai: Partial<JobFacts>, jobDescription: string): JobFacts {
+  const merged: JobFacts = { ...rules };
+  const role = ai.role?.title?.trim();
+  if (!merged.role && role && role.split(/\s+/).length <= MAX_ROLE_WORDS && isVerbatim(role, jobDescription)) {
+    merged.role = { title: role };
+  }
+  for (const [, field] of POINT_FIELDS) {
+    const candidate = ai[field];
+    if (merged[field] || !candidate) continue;
+    if (CATALOGS[field].some((entry) => entry.id === candidate.id) && isVerbatim(candidate.evidence, jobDescription)) {
+      merged[field] = { id: candidate.id, evidence: candidate.evidence.trim() };
+    }
+  }
+  return merged;
+}
+
+/**
+ * Turns facts into the public job analysis. Every point passes the evidence and
+ * content checks; dress formality is derived only from the surviving catalog
+ * entries; the summary is always rebuilt from the surviving points.
+ */
+export function buildJobContext(facts: JobFacts, jobDescription: string, locale: Locale, source: JobContext["source"]): JobContext {
+  const cues = extractJobCues(jobDescription, locale);
+  const role = facts.role ? { id: "role" as const, value: facts.role.title, evidence: facts.role.title } : notStated("role");
+  const entries: Partial<Record<CatalogField, CatalogEntry>> = {};
+  const points: JobInsightPoint[] = [usablePoint(role, jobDescription) ?? notStated("role")];
+  for (const [id, field] of POINT_FIELDS) {
+    const finding = facts[field];
+    const entry = finding ? CATALOGS[field].find((candidate) => candidate.id === finding.id) : undefined;
+    const point = finding && entry ? usablePoint({ id, value: entry.label[locale], evidence: finding.evidence }, jobDescription) : null;
+    if (point && entry) entries[field] = entry;
+    points.push(point ?? notStated(id));
+  }
+  const formality = resolveFormality(entries.dressCode, entries.atmosphere, entries.industry, cues);
+  return checkJobContext({ summary: "", source, formality, points, cues }, jobDescription, locale);
 }
 
 const CUE_FORMALITY: ReadonlyArray<[string, Exclude<Formality, "unknown">]> = [
@@ -292,30 +390,7 @@ export function summarizeJobContext(points: JobInsightPoint[], cues: JobCue[], l
 }
 
 export function analyzeJobRules(jobDescription: string, locale: Locale = "en"): JobContext {
-  const cues = extractJobCues(jobDescription, locale);
-  const industry = findEntry(jobDescription, INDUSTRIES);
-  const atmosphere = findEntry(jobDescription, ATMOSPHERES);
-  const format = findEntry(jobDescription, INTERVIEW_FORMATS);
-  const dressCode = findEntry(jobDescription, DRESS_CODES);
-
-  const points: JobInsightPoint[] = [
-    findRole(jobDescription),
-    catalogPoint("industry", industry, locale),
-    catalogPoint("atmosphere", atmosphere, locale),
-    catalogPoint("interview-format", format, locale),
-    catalogPoint("dress-code", dressCode, locale),
-  ];
-  return checkJobContext(
-    {
-      summary: "",
-      source: "rules",
-      formality: resolveFormality(dressCode?.entry, atmosphere?.entry, industry?.entry, cues),
-      points,
-      cues,
-    },
-    jobDescription,
-    locale,
-  );
+  return buildJobContext(findJobFacts(jobDescription), jobDescription, locale, "rules");
 }
 
 const collapse = (text: string) => text.replace(/\s+/g, " ").trim();
@@ -326,30 +401,40 @@ export function isVerbatim(evidence: string, jobDescription: string): boolean {
   return needle.length > 0 && collapse(jobDescription).toLowerCase().includes(needle.toLowerCase());
 }
 
+/** Links, e-mail addresses, and phone numbers never appear as a finding. */
+const CONTACT_OR_LINK = /https?:|www\.|[\w.+-]+@[\w-]+\.|\b[\w-]+\.(?:com|net|org|io|co|kr|example)\b|\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}/i;
+/** A quote needs at least two letters; a single character proves nothing. */
+const LETTERS = /[A-Za-z\u3131-\u318E\uAC00-\uD7A3]/g;
+
+function usablePoint(point: JobInsightPoint, jobDescription: string): JobInsightPoint | null {
+  if (point.value === null || point.evidence === null) return null;
+  const value = collapse(point.value);
+  const evidence = collapse(point.evidence);
+  const usable =
+    value.length > 0 &&
+    value.length <= MAX_VALUE_LENGTH &&
+    evidence.length <= MAX_EVIDENCE_LENGTH &&
+    (evidence.match(LETTERS)?.length ?? 0) >= 2 &&
+    !CONTACT_OR_LINK.test(value) &&
+    !CONTACT_OR_LINK.test(evidence) &&
+    isVerbatim(evidence, jobDescription) &&
+    passesContentPolicy(value) &&
+    passesContentPolicy(evidence);
+  return usable ? { id: point.id, value, evidence } : null;
+}
+
 /**
- * Applies the content policy and evidence rules to any job analysis, rules or
- * AI: a point survives only with a verbatim quote and policy-compliant text;
- * otherwise it becomes "not stated". An unusable summary is rebuilt from what
- * survived (R1.4, R5.3).
+ * Defense in depth for any job analysis: a point survives only with a usable
+ * verbatim quote and policy-compliant text; otherwise it becomes "not stated".
+ * The summary is always rebuilt from what survived, never taken as given (R1.4, R5.3).
  */
 export function checkJobContext(raw: JobContext, jobDescription: string, locale: Locale): JobContext {
   const points = JOB_INSIGHT_FIELDS.map((id): JobInsightPoint => {
     const point = raw.points.find((candidate) => candidate.id === id);
-    if (!point || point.value === null || point.evidence === null) return notStated(id);
-    const value = collapse(point.value);
-    const evidence = collapse(point.evidence);
-    const usable =
-      value.length > 0 &&
-      value.length <= MAX_VALUE_LENGTH &&
-      evidence.length <= MAX_EVIDENCE_LENGTH &&
-      isVerbatim(evidence, jobDescription) &&
-      passesContentPolicy(value) &&
-      passesContentPolicy(evidence);
-    return usable ? { id, value, evidence } : notStated(id);
+    return (point && usablePoint(point, jobDescription)) ?? notStated(id);
   });
   const cues = raw.cues.filter(
     (cue) => passesContentPolicy(cue.label) && passesContentPolicy(cue.evidence) && isVerbatim(cue.evidence, jobDescription),
   );
-  const summary = raw.summary && passesContentPolicy(raw.summary) ? raw.summary : summarizeJobContext(points, cues, locale);
-  return { summary, source: raw.source, formality: raw.formality, points, cues };
+  return { summary: summarizeJobContext(points, cues, locale), source: raw.source, formality: raw.formality, points, cues };
 }
