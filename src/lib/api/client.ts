@@ -50,12 +50,19 @@ function isAbort(error: unknown): boolean {
 export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof fetch }): ApiClient {
   const fetchImpl = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 
-  async function request<T>(path: string, init: RequestInit, parse: (body: unknown) => T): Promise<T> {
+  async function request<T>(
+    path: string,
+    init: RequestInit,
+    parse: (body: unknown) => T,
+    networkRetries = 0,
+  ): Promise<T> {
     let response: Response;
     try {
       response = await fetchImpl(`${options.baseUrl}${path}`, { ...REQUEST_DEFAULTS, ...init });
     } catch (error) {
       if (isAbort(error)) throw error;
+      // Only requests carrying an idempotency key are retried, so a retry never duplicates work.
+      if (networkRetries > 0) return request(path, init, parse, networkRetries - 1);
       throw new ApiRequestError("PROCESSING_UNAVAILABLE");
     }
 
@@ -90,7 +97,8 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       form.set(ANALYSIS_REQUEST_FIELDS.consentVersion, input.consentVersion);
       form.set(ANALYSIS_REQUEST_FIELDS.jobDescription, input.jobDescription);
       form.set(ANALYSIS_REQUEST_FIELDS.image, input.image, "photo.jpg");
-      return request(API_ROUTES.analysisJobs, { method: "POST", body: form, signal }, parseAnalysisJob);
+      const headers = { "Idempotency-Key": crypto.randomUUID() };
+      return request(API_ROUTES.analysisJobs, { method: "POST", body: form, headers, signal }, parseAnalysisJob, 1);
     },
 
     getAnalysisJob(id, signal) {

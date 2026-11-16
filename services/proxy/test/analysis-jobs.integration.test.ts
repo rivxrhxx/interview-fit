@@ -271,3 +271,36 @@ describe("metadata defense in depth", () => {
     expect(received).not.toContain("GPS 48.8584N");
   });
 });
+
+describe("idempotent job creation", () => {
+  it("returns the same job for a repeated Idempotency-Key and calls the provider once", async () => {
+    const provider = providerReturning(async () => NEUTRAL_OBSERVATIONS);
+    proxy = await startProxy(provider);
+    const key = "idem_0123456789abcdef0123";
+
+    const first = parseAnalysisJob(await (await postAnalysis(proxy, analysisForm(), { "Idempotency-Key": key })).json());
+    const second = parseAnalysisJob(await (await postAnalysis(proxy, analysisForm(), { "Idempotency-Key": key })).json());
+    const other = parseAnalysisJob(
+      await (await postAnalysis(proxy, analysisForm(), { "Idempotency-Key": "idem_ffffffffffffffffffff" })).json(),
+    );
+
+    expect(second.id).toBe(first.id);
+    expect(other.id).not.toBe(first.id);
+    await waitFor(async () => (provider.calls.length === 2 ? true : undefined));
+    expect(proxy.store.size()).toBe(2);
+  });
+
+  it("ignores malformed keys and allows the header in CORS preflight", async () => {
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS));
+
+    const a = parseAnalysisJob(await (await postAnalysis(proxy, analysisForm(), { "Idempotency-Key": "x" })).json());
+    const b = parseAnalysisJob(await (await postAnalysis(proxy, analysisForm(), { "Idempotency-Key": "x" })).json());
+    const preflight = await fetch(`${proxy.baseUrl}/v1/analysis-jobs`, {
+      method: "OPTIONS",
+      headers: { Origin: DESKTOP_ORIGIN, "Access-Control-Request-Method": "POST" },
+    });
+
+    expect(a.id).not.toBe(b.id);
+    expect(preflight.headers.get("access-control-allow-headers")).toMatch(/Idempotency-Key/);
+  });
+});

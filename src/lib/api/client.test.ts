@@ -40,6 +40,29 @@ describe("createHttpApiClient", () => {
     expect(form.get("image")).toBeInstanceOf(Blob);
   });
 
+  it("sends an idempotency key and retries once with the same key after a network failure", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(jsonResponse(queued, 202));
+
+    await clientWith(fetchMock).createAnalysisJob({ consentVersion: "v", jobDescription: "Analyst", image: new Blob(["x"]) });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const keys = fetchMock.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers).get("Idempotency-Key"));
+    expect(keys[0]).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("does not retry job creation after an HTTP error response", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(rateLimited, 429));
+
+    await expect(
+      clientWith(fetchMock).createAnalysisJob({ consentVersion: "v", jobDescription: "Analyst", image: new Blob(["x"]) }),
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("drops provider fields that a misbehaving backend might leak (R4.2)", async () => {
     const job = await clientWith(vi.fn(async () => jsonResponse(leakedJob))).getAnalysisJob(JOB_ID);
 
