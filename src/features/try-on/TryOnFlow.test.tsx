@@ -202,6 +202,18 @@ describe("virtual try-on step", () => {
     expect(await screen.findByRole("img", { name: "Neat updo preview" })).toBeInTheDocument();
   });
 
+  it("offers a retry instead of hanging when the backend stops the preview on its own", async () => {
+    const api = mockApi({ getTryOnJob: vi.fn(async () => ({ ...queuedTryOn(), state: "cancelled" as const })) });
+    const user = userEvent.setup();
+    renderApp(createMockAdapters({ api }));
+    await openTryOn(user);
+
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
+
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel preview" })).not.toBeInTheDocument();
+  });
+
   it("asks the backend to delete the analysis copy when the user starts over", async () => {
     const api = mockApi();
     const user = userEvent.setup();

@@ -76,6 +76,8 @@ export function createTryOnJobs(options: {
 
   function remove(record: TryOnJobRecord) {
     record.abort?.abort();
+    // A provider that ignores the abort and answers later finds the job ended and zeroes the result.
+    if (isActive(record)) record.state = "cancelled";
     wipe(record);
     record.reservedBytes = 0;
     jobs.delete(record.id);
@@ -147,10 +149,15 @@ export function createTryOnJobs(options: {
   return {
     create(analysis, styleId) {
       // One try-on per analysis: a new style replaces the previous one, running or finished.
-      for (const record of [...jobs.values()]) if (record.analysisJobId === analysis.id) discard(record);
-      if ([...jobs.values()].filter(isActive).length >= options.maxActive) throw new TryOnCapacityError("busy");
+      // Capacity is checked as if that one were already gone, and it is discarded only once
+      // the new try-on is accepted, so a refused request changes nothing.
+      const previous = [...jobs.values()].filter((record) => record.analysisJobId === analysis.id);
+      const othersActive = [...jobs.values()].filter((record) => isActive(record) && record.analysisJobId !== analysis.id).length;
+      if (othersActive >= options.maxActive) throw new TryOnCapacityError("busy");
       const reservedBytes = reservationFor(analysis.image!.length);
-      if (!options.fits(reservedBytes)) throw new TryOnCapacityError("memory");
+      const freed = previous.reduce((sum, record) => sum + (record.result?.bytes.length ?? 0) + record.reservedBytes, 0);
+      if (!options.fits(reservedBytes - freed)) throw new TryOnCapacityError("memory");
+      for (const record of previous) discard(record);
       const createdAt = now();
       const record: TryOnJobRecord = {
         id: newTryOnJobId() as TryOnJobId,

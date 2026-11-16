@@ -15,12 +15,12 @@ Frankenstein — Tauri/Rust security boundary + React UX + webcam/photo capture 
 
 ## Kiro hooks evidence
 
-The hooks use the current Kiro format: `.kiro/hooks/*.json`, `"version": "v1"`, a `hooks` array, `PostFileSave` triggers with a regex `matcher` on the file path, and `"type": "agent"` actions. The legacy `.kiro.hook` files were removed. `npm run verify:harness` checks the schema and tests each matcher against sample paths.
+The hooks use the current Kiro format: `.kiro/hooks/*.json`, `"version": "v1"`, a `hooks` array, `PostFileSave` triggers with a regex `matcher` on the file path, and `"type": "agent"` actions. The legacy `.kiro.hook` files were removed. `npm run verify:harness` checks the schema, rejects regex features Kiro CLI's Rust engine lacks (lookaround, backreferences), and tests each matcher against sample paths.
 
 | Hook | File | Fires for | Action |
 |---|---|---|---|
-| TypeScript quality gate | `.kiro/hooks/typescript-quality.json` | `.ts`/`.tsx` under any `src/` (desktop, backend, contracts) | Runs `npm run verify:fast`; fixes only errors the edit caused |
-| Privacy boundary review | `.kiro/hooks/privacy-review.json` | `src-tauri/`, `services/proxy/`, photo upload, capture, consent, job text, try-on, report, API/Tauri/media adapters, consent and policy contracts | Applies `.kiro/prompts/privacy-review.md` to `git diff` |
+| TypeScript quality gate | `.kiro/hooks/typescript-quality.json` | Any `.ts`/`.tsx` file (all are typechecked by `verify:fast`) | Runs `npm run verify:fast`; fixes only errors the edit caused |
+| Privacy boundary review | `.kiro/hooks/privacy-review.json` | `src-tauri/`, `services/proxy/`, photo upload, capture, consent, job text, try-on, report, API/Tauri/media adapters and `src/lib/adapters.tsx`, `src/app/App.tsx` and `flowReducer.ts`, consent and policy contracts | Applies `.kiro/prompts/privacy-review.md` to `git diff` |
 
 To capture evidence in Kiro (IDE 1.0+ or CLI 3.0+):
 

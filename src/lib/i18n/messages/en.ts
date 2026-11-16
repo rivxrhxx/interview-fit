@@ -81,7 +81,7 @@ export const en = {
   } as Record<Recovery, string>,
   notices: {
     consentDeclined:
-      "Your photo was discarded and nothing was uploaded. You can edit the job description or choose another photo.",
+      "Your photo was discarded and was not uploaded. You can edit the job description or choose another photo.",
     jobAnalyzing: "Reading the posting…",
     uploading: "Uploading your photo securely…",
     processing: "Analyzing presentation cues…",
@@ -131,7 +131,7 @@ export const en = {
   },
   photo: {
     title: "Photo",
-    hint: "Use a JPEG or PNG up to 10 MB and 16 megapixels. Location and camera metadata are removed on this device. Nothing is uploaded until you review and agree on the consent step.",
+    hint: "Use a JPEG or PNG up to 10 MB and 16 megapixels. Location and camera metadata are removed on this device. The photo is not uploaded until you review and agree on the consent step.",
     choose: "Choose a photo",
     chooseDetail: "A JPEG or PNG from this computer",
     camera: "Use camera",

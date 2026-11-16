@@ -6,6 +6,9 @@ const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 /** How long a cancel for a not-yet-created job is remembered. */
 const TOMBSTONE_MS = 60_000;
 
+/** Upper bound on remembered cancels, so random keys cannot grow memory; the oldest go first. */
+export const MAX_TOMBSTONES = 1_024;
+
 /** The request's Idempotency-Key, scoped to the peer address, or null when missing or malformed. */
 export function requestKey(request: IncomingMessage): string | null {
   const header = request.headers["idempotency-key"];
@@ -40,6 +43,8 @@ export function createIdempotencyRegistry(now: () => number): IdempotencyRegistr
       ids.set(key, id);
     },
     tombstone(key) {
+      tombstones.delete(key);
+      while (tombstones.size >= MAX_TOMBSTONES) tombstones.delete(tombstones.keys().next().value!);
       tombstones.set(key, now() + TOMBSTONE_MS);
     },
     takeTombstone(key) {
