@@ -1,6 +1,7 @@
 import type { Locale, Observation } from "../../../../packages/contracts/src/index.ts";
 import { encodePng } from "../png.ts";
 import { captureBasics } from "./captureBasics.ts";
+import { skinPrepObservations } from "./youcam/skinPrep.ts";
 import { ProviderError, type AnalysisProvider, type ProviderImage, type TryOnProvider } from "./types.ts";
 
 export type SimulatorScenario = "success" | "timeout" | "unavailable" | "rate-limited" | "malformed";
@@ -22,6 +23,11 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 /** Deterministic observations for demos and tests (R9.2). */
 export function simulatedObservations(image: ProviderImage, locale: Locale = "en"): Observation[] {
+  // Fixed demo scores; the live adapter reads them from YouCam and discards them.
+  const prep = skinPrepObservations(
+    { output: [{ type: "oiliness", raw_score: 52 }, { type: "moisture", raw_score: 74 }, { type: "redness", raw_score: 81 }, { type: "texture", raw_score: 66 }] },
+    locale,
+  );
   return [
     ...captureBasics(image, locale),
     {
@@ -33,6 +39,7 @@ export function simulatedObservations(image: ProviderImage, locale: Locale = "en
           ? "이 사진에서는 정면 조명을 확인할 수 없었어요."
           : "Front lighting could not be confirmed from this photo.",
     },
+    ...(prep ?? []),
   ];
 }
 

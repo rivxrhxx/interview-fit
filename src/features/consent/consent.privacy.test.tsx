@@ -33,7 +33,15 @@ describe("ConsentGate", () => {
   it("states how long the backend keeps the temporary copy", () => {
     render(<ConsentGate onAccept={() => {}} onDecline={() => {}} />);
 
-    expect(screen.getByText(/keeps a temporary copy for up to 15 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/keeps a temporary copy of the photo for up to 15 minutes/)).toBeInTheDocument();
+  });
+
+  it("names the AI provider as a text-only recipient that never gets the photo (R3.4)", () => {
+    render(<ConsentGate onAccept={() => {}} onDecline={() => {}} />);
+
+    expect(screen.getByText(/Anthropic \(Claude\).*never the photo/)).toBeInTheDocument();
+    expect(screen.getByText(/Skin analysis is shown only as prep tips, without scores/)).toBeInTheDocument();
+    expect(CONSENT_VERSION).toBe("2026-11-16.v3");
   });
 
   it("does not accept until the box is checked", async () => {

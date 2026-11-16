@@ -163,12 +163,15 @@ describe("idempotency", () => {
 
     await analyze(provider);
 
-    const creates = youcam.requests.filter((request) => request.method === "POST" && request.url.includes("/task/"));
+    const creates = (tool: string) => youcam.requests.filter((request) => request.method === "POST" && request.url.endsWith(`/task/${tool}`));
     const uploads = youcam.requests.filter((request) => request.method === "PUT");
-    const polls = youcam.requests.filter((request) => request.method === "GET");
-    expect(creates).toHaveLength(1);
-    expect(uploads).toHaveLength(1);
-    expect(polls).toHaveLength(4);
+    const polls = (tool: string) => youcam.requests.filter((request) => request.method === "GET" && request.url.includes(`/task/${tool}/`));
+    expect(creates("face-attr-analysis")).toHaveLength(1);
+    expect(creates("skin-analysis")).toHaveLength(1);
+    // One upload per tool: reusing a file ID across tools is not documented.
+    expect(uploads).toHaveLength(2);
+    expect(polls("face-attr-analysis")).toHaveLength(4);
+    expect(polls("skin-analysis")).toHaveLength(1);
   });
 
   it("never re-submits a task when creation fails, so units are not charged twice", async () => {

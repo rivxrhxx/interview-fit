@@ -4,4 +4,5 @@
  * with CONSENT_REQUIRED.
  */
 // v2 (2026-11-16): states how long the backend keeps the temporary copy.
-export const CURRENT_CONSENT_VERSION = "2026-11-16.v2";
+// v3 (2026-11-16): adds the AI provider (text only), skin-prep tips, 1024 px photos, and the hairstyle try-on.
+export const CURRENT_CONSENT_VERSION = "2026-11-16.v3";

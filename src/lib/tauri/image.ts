@@ -42,9 +42,19 @@ export const nativeImageAdapter: ImageAdapter = {
   },
 };
 
+/** Long-side cap shared with the native command (R3.3). */
+export const MAX_OUTPUT_LONG_SIDE = 1024;
+
+/** Output size that fits the long side within the cap without upscaling. */
+export function fitWithin(width: number, height: number, maxLongSide = MAX_OUTPUT_LONG_SIDE) {
+  const scale = Math.min(1, maxLongSide / Math.max(width, height));
+  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+}
+
 /**
  * Browser-only development fallback for `npm run dev` outside the desktop shell.
- * Canvas re-encoding applies orientation and drops all source metadata.
+ * Canvas re-encoding applies orientation, scales to the 1024 px cap, and drops all
+ * source metadata.
  */
 export const browserImageAdapter: ImageAdapter = {
   async prepare(bytes) {
@@ -60,12 +70,13 @@ export const browserImageAdapter: ImageAdapter = {
 
     try {
       if (bitmap.width * bitmap.height > IMAGE_MAX_PIXELS) throw new ImagePreparationError("IMAGE_TOO_LARGE");
+      const size = fitWithin(bitmap.width, bitmap.height);
       const canvas = document.createElement("canvas");
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
+      canvas.width = size.width;
+      canvas.height = size.height;
       const context = canvas.getContext("2d");
       if (!context) throw new ImagePreparationError("INTERNAL_ERROR");
-      context.drawImage(bitmap, 0, 0);
+      context.drawImage(bitmap, 0, 0, size.width, size.height);
       return await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => (blob ? resolve(blob) : reject(new ImagePreparationError("INTERNAL_ERROR"))),
