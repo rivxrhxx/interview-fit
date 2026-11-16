@@ -1,0 +1,246 @@
+import { ERROR_MESSAGES, type ErrorCode, type ObservationCategory, type Recovery } from "../../api/contracts";
+
+type StepCopy = { label: string; heading: string; description: string };
+
+const count = (value: number) => new Intl.NumberFormat("en-US").format(value);
+
+export const en = {
+  languageName: "English",
+  shell: {
+    skipLink: "Skip to main content",
+    languageGroup: "Language",
+    progressLabel: "Progress",
+    completed: "(completed)",
+    caption: (position: number, total: number, label: string) => `${position} of ${total} · ${label}`,
+    describe: (position: number, total: number, label: string) => `Step ${position} of ${total}: ${label}`,
+    interrupted: (label: string, heading: string) => `${label}: ${heading}`,
+  },
+  steps: {
+    draft: {
+      label: "Job & photo",
+      heading: "Describe the role and choose a photo",
+      description: "Suggestions are tailored to the posting, always optional, and never judge how you look.",
+    },
+    "image-ready": {
+      label: "Preview",
+      heading: "Check your photo",
+      description: "This copy was re-encoded on your device without location or camera details.",
+    },
+    consenting: {
+      label: "Consent",
+      heading: "Review how your photo is used",
+      description: "Nothing leaves your device until you agree below.",
+    },
+    analyzing: {
+      label: "Analysis",
+      heading: "Analyzing presentation cues",
+      description: "This usually takes a few seconds.",
+    },
+    reviewed: {
+      label: "Guidance",
+      heading: "Your presentation guidance",
+      description: "Optional suggestions based on your photo and the job description.",
+    },
+    "trying-on": {
+      label: "Try-on",
+      heading: "Preview interview attire",
+      description: "One curated style, shown next to your original photo.",
+    },
+    "report-ready": {
+      label: "Report",
+      heading: "Your report is ready",
+      description: "A text-only summary you can keep for your preparation.",
+    },
+    error: {
+      label: "Interrupted",
+      heading: "That step could not be completed",
+      description: "Nothing was saved. Choose how you'd like to continue.",
+    },
+  } satisfies Record<string, StepCopy>,
+  errors: ERROR_MESSAGES as Record<ErrorCode, string>,
+  recovery: {
+    retry: "Try again",
+    "retry-later": "Try again",
+    "choose-another-image": "Choose another photo",
+    "review-consent": "Review consent",
+    "edit-job-description": "Edit job description",
+    "start-over": "Start over",
+  } as Record<Recovery, string>,
+  notices: {
+    consentDeclined:
+      "Your photo was discarded and nothing was uploaded. You can keep editing the job description or choose another photo.",
+    uploading: "Uploading your photo securely…",
+    processing: "Analyzing presentation cues…",
+  },
+  job: {
+    label: "Job description",
+    hint: "Paste the posting you are preparing for. It is treated as plain text and used only to tailor optional suggestions.",
+    counter: (length: number, max: number) => `${count(length)} / ${count(max)} characters`,
+    empty: "Enter a job description to continue.",
+    tooLong: (max: number, length: number) =>
+      `Shorten the job description to ${count(max)} characters or fewer (currently ${count(length)}).`,
+    save: "Save job description",
+    summaryTitle: "Job description",
+    edit: "Edit",
+    editLabel: "Edit job description",
+    saved: (length: number) => `${count(length)} characters saved`,
+  },
+  photo: {
+    title: "Photo",
+    hint: "Use a JPEG or PNG up to 10 MB and 16 megapixels. Location and camera metadata are removed on this device. Nothing is uploaded until you review and agree on the consent step.",
+    choose: "Choose a photo",
+    chooseDetail: "A JPEG or PNG from this computer",
+    camera: "Use camera",
+    cameraDetail: "Take one photo now",
+    fileLabel: "Photo file",
+    checking: "Checking your photo…",
+    backgrounded: "The camera was turned off because Interview Fit moved to the background.",
+    denied: "Camera access was not allowed. You can choose a photo file instead.",
+    unavailable: "No camera is available right now. You can choose a photo file instead.",
+    captureFailed: "The camera photo could not be captured. Try again or choose a photo file.",
+    prepareFailed: "The photo could not be prepared. Try again or choose a different image.",
+    previewLabel: "Photo preview",
+    previewAlt: "Selected photo preview",
+    useThis: "Use this photo",
+    remove: "Remove photo",
+  },
+  camera: {
+    waiting: "Waiting for camera permission…",
+    previewLabel: "Camera preview",
+    take: "Take photo",
+    cancel: "Cancel camera",
+  },
+  consent: {
+    groups: [
+      {
+        id: "consent-what",
+        title: "What is sent",
+        items: [
+          "The photo you just confirmed, re-encoded on this device without location or camera metadata.",
+          "The job description text you saved.",
+          "The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner when you cancel or start over.",
+        ],
+      },
+      {
+        id: "consent-why",
+        title: "Why",
+        items: [
+          "To produce optional, neutral suggestions about lighting, framing, background, and attire context.",
+          "To preview one curated interview attire style if you choose to.",
+        ],
+      },
+      {
+        id: "consent-who",
+        title: "Who receives it",
+        items: [
+          "The Interview Fit backend, operated for this app.",
+          "YouCam (Perfect Corp.), the image-analysis and try-on provider the backend uses on Interview Fit's behalf. Its own retention terms apply to its processing.",
+        ],
+      },
+      {
+        id: "consent-never",
+        title: "What Interview Fit never does",
+        items: [
+          "Diagnose health conditions or score appearance or attractiveness.",
+          "Infer personality, emotion, or protected traits, or predict interview or hiring outcomes.",
+          "Keep your photo in app history. Results are saved only if you export them.",
+        ],
+      },
+    ],
+    agree: "I agree to send this photo and job description to Interview Fit and its provider for this analysis.",
+    error: "Check the box to agree, or choose Not now.",
+    version: (version: string) => `Consent version ${version}`,
+    submit: "Agree and analyze",
+    decline: "Not now",
+  },
+  analysis: {
+    hint: "Your photo and job description are being processed by the Interview Fit backend. Cancelling stops the analysis and asks the backend to delete the temporary copy.",
+    cancel: "Cancel analysis",
+  },
+  categories: {
+    lighting: "Lighting",
+    framing: "Framing",
+    background: "Background",
+    "image-clarity": "Image clarity",
+    attire: "Attire",
+  } as Record<ObservationCategory, string>,
+  review: {
+    title: "What the photo shows",
+    empty: "No capture observations were returned for this photo.",
+    ok: "Looks fine",
+    adjustable: "Could be adjusted",
+    languageNote: "This guidance was generated in Korean. Start over to get it in English.",
+  },
+  guidance: {
+    contextTitle: "Job context",
+    cuesLabel: "Cues from the job description",
+    suggestionsTitle: "Suggestions",
+    disclaimer: "These suggestions are optional. Interview Fit does not assess your appearance or predict interview outcomes.",
+    empty: "No adjustments to suggest for this photo and job description.",
+    listLabel: "Suggestions",
+    noticed: "What we noticed",
+    adjustment: "Optional adjustment",
+    why: "Why",
+    fromJob: "From the job description",
+  },
+  reviewed: {
+    tryOn: "Preview interview attire",
+    report: "Create report",
+    startOver: "Start over",
+  },
+  tryOn: {
+    regionLabel: "Curated style",
+    eyebrow: "Curated style",
+    style: {
+      label: "Navy blazer",
+      description: "A classic single-breasted navy blazer, a common choice for business interviews.",
+    },
+    notSaved: "The preview is not saved. Only an explicit export creates a file.",
+    generate: "Generate preview",
+    retry: "Try again",
+    cancel: "Cancel preview",
+    continue: "Continue to report",
+    reset: "Reset preview",
+    back: "Back to guidance",
+    original: "Original",
+    previewCaption: (label: string) => `Preview: ${label}`,
+    originalAlt: "Your photo",
+    previewAlt: (label: string) => `${label} preview`,
+    running: "Creating your preview…",
+    ready: "Preview ready. Compare it with your original photo.",
+  },
+  report: {
+    hint: "Your photo is not included. Saving creates a text file only where you choose.",
+    previewLabel: "Report preview",
+    save: "Save report…",
+    back: "Back to guidance",
+    startOver: "Start over",
+    saved: "Report saved.",
+    cancelled: "Save cancelled. Nothing was written.",
+    failed: "The report could not be saved. Choose another location and try again.",
+    document: {
+      title: "Interview Fit report",
+      generated: "Generated",
+      jobContext: "Job context",
+      noSummary: "No job-context summary is available.",
+      guidance: "Presentation guidance",
+      optional: "These suggestions are optional.",
+      noRecommendations: "No adjustments were suggested for this photo and job description.",
+      tryOn: "Virtual try-on",
+      status: "Status",
+      tryOnStatus: {
+        created: "A navy blazer preview was created during this session. It is not included in this report.",
+        "not-created": "No try-on preview was created.",
+        unavailable: "A try-on preview could not be created.",
+      },
+      privacy: "Privacy",
+      privacyLines: [
+        "This report contains text only. It does not include your photo, the try-on preview, or any image data.",
+        "Interview Fit offers optional, neutral suggestions. It does not assess appearance, infer personal traits, or predict interview outcomes.",
+        "Temporary copies held by the Interview Fit backend are deleted when you start over or when they expire, by default within 15 minutes. The image provider's own retention terms apply to its processing.",
+      ],
+    },
+  },
+};
+
+export type Messages = typeof en;

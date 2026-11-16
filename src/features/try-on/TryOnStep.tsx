@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useAdapters } from "../../lib/adapters";
-import { ERROR_MESSAGES, ERROR_POLICY, TRY_ON_STYLES, type AnalysisJobId, type ErrorCode, type TryOnJobId } from "../../lib/api/contracts";
+import { ERROR_POLICY, TRY_ON_STYLES, type AnalysisJobId, type ErrorCode, type TryOnJobId } from "../../lib/api/contracts";
+import { useI18n, type Messages } from "../../lib/i18n";
 import { runTryOn, type TryOnOutcome } from "./runTryOn";
 import { TryOnCompare } from "./TryOnCompare";
 
@@ -69,6 +70,8 @@ function TryOnRunner({
 export function TryOnStep(props: TryOnStepProps) {
   const { phase } = props;
   const { api } = useAdapters();
+  const { m } = useI18n();
+  const style = m.tryOn.style;
   const readyJob = phase.status === "ready" ? phase.jobId : null;
 
   // Leaving the ready state (reset, back, start over) deletes the backend copy of the result.
@@ -83,52 +86,52 @@ export function TryOnStep(props: TryOnStepProps) {
 
   return (
     <div className="step-stack">
-      <section className="panel" aria-label="Curated style">
-        <p className="eyebrow">Curated style</p>
-        <h2 className="section-title">{CURATED_STYLE.label}</h2>
-        <p className="hint">{CURATED_STYLE.description}</p>
-        <p className="meta">The preview is not saved. Only an explicit export creates a file.</p>
+      <section className="panel" aria-label={m.tryOn.regionLabel}>
+        <p className="eyebrow">{m.tryOn.eyebrow}</p>
+        <h2 className="section-title">{style.label}</h2>
+        <p className="hint">{style.description}</p>
+        <p className="meta">{m.tryOn.notSaved}</p>
       </section>
 
       {phase.status === "running" && <TryOnRunner key={props.attempt} {...props} />}
       {phase.status === "ready" && (
-        <TryOnCompare original={props.original} preview={phase.preview} styleLabel={CURATED_STYLE.label} />
+        <TryOnCompare original={props.original} preview={phase.preview} styleLabel={style.label} />
       )}
 
       <div className="actions">
         {phase.status === "idle" && (
           <button type="button" className="button button-primary" onClick={props.onStart}>
-            Generate preview
+            {m.tryOn.generate}
           </button>
         )}
         {retryable && (
           <button type="button" className="button button-primary" onClick={props.onStart}>
-            Try again
+            {m.tryOn.retry}
           </button>
         )}
         {phase.status === "running" && (
           <button type="button" className="button button-secondary" onClick={props.onCancel}>
-            Cancel preview
+            {m.tryOn.cancel}
           </button>
         )}
         {phase.status === "ready" && (
           <button type="button" className="button button-primary" onClick={props.onContinue}>
-            Continue to report
+            {m.tryOn.continue}
           </button>
         )}
         {phase.status === "ready" && (
           <button type="button" className="button button-secondary" onClick={props.onReset}>
-            Reset preview
+            {m.tryOn.reset}
           </button>
         )}
         {(phase.status === "idle" || phase.status === "failed") && (
           <button type="button" className="button button-secondary" onClick={props.onContinue}>
-            Continue to report
+            {m.tryOn.continue}
           </button>
         )}
         {phase.status !== "running" && (
           <button type="button" className="button button-text" onClick={props.onClose}>
-            Back to guidance
+            {m.tryOn.back}
           </button>
         )}
       </div>
@@ -136,14 +139,14 @@ export function TryOnStep(props: TryOnStepProps) {
   );
 }
 
-export function tryOnNotice(phase: TryOnPhase): string | undefined {
+export function tryOnNotice(phase: TryOnPhase, m: Messages): string | undefined {
   switch (phase.status) {
     case "running":
-      return "Creating your preview…";
+      return m.tryOn.running;
     case "ready":
-      return "Preview ready. Compare it with your original photo.";
+      return m.tryOn.ready;
     case "failed":
-      return ERROR_MESSAGES[phase.code];
+      return m.errors[phase.code];
     default:
       return undefined;
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAdapters } from "../../lib/adapters";
+import { useI18n } from "../../lib/i18n";
 import { CameraError, stopStream } from "../../lib/media/camera";
 
 export type CameraCloseReason = "cancelled" | "backgrounded" | "denied" | "unavailable" | "failed";
@@ -17,6 +18,7 @@ type Phase = "requesting" | "live" | "capturing";
  */
 export function CameraCapture({ onCaptured, onClosed }: CameraCaptureProps) {
   const { camera } = useAdapters();
+  const { m } = useI18n();
   const [phase, setPhase] = useState<Phase>("requesting");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -100,17 +102,17 @@ export function CameraCapture({ onCaptured, onClosed }: CameraCaptureProps) {
     <div className="step-stack">
       <div className="photo-frame">
         {phase === "requesting" ? (
-          <p className="hint">Waiting for camera permission…</p>
+          <p className="hint">{m.camera.waiting}</p>
         ) : (
-          <video ref={videoRef} aria-label="Camera preview" autoPlay muted playsInline />
+          <video ref={videoRef} aria-label={m.camera.previewLabel} autoPlay muted playsInline />
         )}
       </div>
       <div className="actions">
         <button type="button" className="button button-primary" onClick={takePhoto} disabled={phase !== "live"}>
-          Take photo
+          {m.camera.take}
         </button>
         <button type="button" className="button button-text" onClick={() => close("cancelled")}>
-          Cancel camera
+          {m.camera.cancel}
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ import {
   type TryOnJob,
   type TryOnJobId,
   type TryOnRequest,
+  type Locale,
 } from "./contracts";
 import { sniffImageType } from "../validation/image";
 
@@ -31,6 +32,8 @@ export interface CreateAnalysisJobInput {
   jobDescription: string;
   /** Metadata-free JPEG produced by the native image adapter. */
   image: Blob;
+  /** Language for generated guidance; the backend defaults to "en". */
+  locale?: Locale;
 }
 
 /** Typed first-party backend boundary. React never calls `fetch` directly. */
@@ -117,6 +120,7 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       form.set(ANALYSIS_REQUEST_FIELDS.consentVersion, input.consentVersion);
       form.set(ANALYSIS_REQUEST_FIELDS.jobDescription, input.jobDescription);
       form.set(ANALYSIS_REQUEST_FIELDS.image, input.image, "photo.jpg");
+      if (input.locale) form.set(ANALYSIS_REQUEST_FIELDS.locale, input.locale);
       const headers = { "Idempotency-Key": crypto.randomUUID() };
       return request(API_ROUTES.analysisJobs, { method: "POST", body: form, headers, signal }, parseAnalysisJob, 1).catch(
         async (error: unknown) => {

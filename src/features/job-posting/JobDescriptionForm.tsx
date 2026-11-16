@@ -1,13 +1,16 @@
 import { useId, useRef, useState, type FormEvent } from "react";
+import { useI18n, type Messages } from "../../lib/i18n";
 import { JOB_DESCRIPTION_MAX_LENGTH } from "../../lib/validation/limits";
 import {
-  formatCount,
-  jobDescriptionErrorMessage,
   normalizeJobDescription,
   validateJobDescription,
   type JobDescription,
   type JobDescriptionError,
 } from "./validation";
+
+function errorMessage(m: Messages, error: JobDescriptionError): string {
+  return error.code === "JOB_DESCRIPTION_EMPTY" ? m.job.empty : m.job.tooLong(error.maxLength, error.length);
+}
 
 interface JobDescriptionFormProps {
   initialText?: string;
@@ -15,6 +18,7 @@ interface JobDescriptionFormProps {
 }
 
 export function JobDescriptionForm({ initialText = "", onSubmit }: JobDescriptionFormProps) {
+  const { m } = useI18n();
   const [text, setText] = useState(initialText);
   const [error, setError] = useState<JobDescriptionError | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -49,11 +53,10 @@ export function JobDescriptionForm({ initialText = "", onSubmit }: JobDescriptio
     <form className="form" onSubmit={handleSubmit} noValidate>
       <div className="field">
         <label className="field-label" htmlFor={fieldId}>
-          Job description
+          {m.job.label}
         </label>
         <p className="field-hint" id={hintId}>
-          Paste the posting you are preparing for. It is treated as plain text and used only to tailor optional
-          suggestions.
+          {m.job.hint}
         </p>
         <textarea
           id={fieldId}
@@ -69,17 +72,17 @@ export function JobDescriptionForm({ initialText = "", onSubmit }: JobDescriptio
         <div className="field-footer">
           {error && (
             <p className="field-error" id={errorId}>
-              {jobDescriptionErrorMessage(error)}
+              {errorMessage(m, error)}
             </p>
           )}
           <p className="field-counter" id={counterId} data-over-limit={overLimit || undefined}>
-            {formatCount(length)} / {formatCount(JOB_DESCRIPTION_MAX_LENGTH)} characters
+            {m.job.counter(length, JOB_DESCRIPTION_MAX_LENGTH)}
           </p>
         </div>
       </div>
       <div className="actions">
         <button type="submit" className="button button-primary">
-          Save job description
+          {m.job.save}
         </button>
       </div>
     </form>

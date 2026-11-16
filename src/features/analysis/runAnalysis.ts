@@ -1,6 +1,13 @@
 import { ApiRequestError, type ApiClient } from "../../lib/api";
 import { PollCancelled as Cancelled, abortableSleep } from "../../lib/api/polling";
-import { TERMINAL_JOB_STATES, type AnalysisJob, type AnalysisJobId, type AnalysisResult, type ErrorCode } from "../../lib/api/contracts";
+import {
+  TERMINAL_JOB_STATES,
+  type AnalysisJob,
+  type AnalysisJobId,
+  type AnalysisResult,
+  type ErrorCode,
+  type Locale,
+} from "../../lib/api/contracts";
 import { isConsentCurrent, type ConsentRecord } from "../consent";
 
 export type AnalysisStage = "uploading" | "processing";
@@ -15,6 +22,8 @@ export interface RunAnalysisOptions {
   jobDescription: string;
   image: Blob;
   consent: ConsentRecord;
+  /** Language for generated guidance. */
+  locale?: Locale;
   signal: AbortSignal;
   pollIntervalMs: number;
   /** Overall client deadline, a backstop for the backend's own provider timeout. */
@@ -58,7 +67,12 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<Analysis
     let job: AnalysisJob;
     try {
       job = await api.createAnalysisJob(
-        { consentVersion: options.consent.version, jobDescription: options.jobDescription, image: options.image },
+        {
+          consentVersion: options.consent.version,
+          jobDescription: options.jobDescription,
+          image: options.image,
+          locale: options.locale,
+        },
         signal,
       );
     } catch (error) {

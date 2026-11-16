@@ -2,13 +2,11 @@ import { useEffect, useReducer, useRef } from "react";
 import "./App.css";
 import { AppShell } from "./AppShell";
 import { ErrorPanel } from "./ErrorPanel";
-import { flowReducer, initialFlowState, type DraftNotice, type FlowEvent, type FlowState } from "./flowReducer";
-import { ERROR_MESSAGES } from "../lib/api/contracts";
+import { flowReducer, initialFlowState, type FlowEvent, type FlowState } from "./flowReducer";
 import {
   AnalysisProgress,
   AnalysisReview,
   DEFAULT_ANALYSIS_TIMING,
-  type AnalysisStage,
   type AnalysisTiming,
 } from "../features/analysis";
 import { PhotoPicker, PhotoPreview } from "../features/capture";
@@ -17,32 +15,23 @@ import { RecommendationList } from "../features/recommendation";
 import { ReportStep } from "../features/report";
 import { TryOnStep, tryOnNotice } from "../features/try-on";
 import { useAdapters } from "../lib/adapters";
+import { useI18n, type Messages } from "../lib/i18n";
 import { JobDescriptionForm, JobDescriptionSummary } from "../features/job-posting";
 
 export type { AnalysisTiming } from "../features/analysis";
 
 type Dispatch = (event: FlowEvent) => void;
 
-const DRAFT_NOTICES: Record<DraftNotice, string> = {
-  "consent-declined":
-    "Your photo was discarded and nothing was uploaded. You can keep editing the job description or choose another photo.",
-};
-
-const STAGE_NOTICES: Record<AnalysisStage, string> = {
-  uploading: "Uploading your photo securely…",
-  processing: "Analyzing presentation cues…",
-};
-
-function noticeFor(state: FlowState): string | undefined {
+function noticeFor(state: FlowState, m: Messages): string | undefined {
   switch (state.step) {
     case "draft":
-      return state.notice ? DRAFT_NOTICES[state.notice] : undefined;
+      return state.notice === "consent-declined" ? m.notices.consentDeclined : undefined;
     case "analyzing":
-      return STAGE_NOTICES[state.stage];
+      return state.stage === "uploading" ? m.notices.uploading : m.notices.processing;
     case "error":
-      return ERROR_MESSAGES[state.code];
+      return m.errors[state.code];
     case "trying-on":
-      return tryOnNotice(state.tryOn);
+      return tryOnNotice(state.tryOn, m);
     default:
       return undefined;
   }
@@ -63,6 +52,7 @@ function DraftStep({ state, dispatch }: { state: Extract<FlowState, { step: "dra
 }
 
 function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: Dispatch; timing: AnalysisTiming }) {
+  const { m } = useI18n();
   switch (state.step) {
     case "draft":
       return <DraftStep state={state} dispatch={dispatch} />;
@@ -70,7 +60,7 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
       return (
         <PhotoPreview image={state.image} onRemove={() => dispatch({ type: "IMAGE_DISCARDED" })}>
           <button type="button" className="button button-primary" onClick={() => dispatch({ type: "PHOTO_CONFIRMED" })}>
-            Use this photo
+            {m.photo.useThis}
           </button>
         </PhotoPreview>
       );
@@ -107,17 +97,17 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
           <RecommendationList result={state.analysis.result} />
           <div className="actions">
             <button type="button" className="button button-primary" onClick={() => dispatch({ type: "TRY_ON_OPENED" })}>
-              Preview interview attire
+              {m.reviewed.tryOn}
             </button>
             <button
               type="button"
               className="button button-secondary"
               onClick={() => dispatch({ type: "REPORT_REQUESTED", generatedAt: new Date().toISOString() })}
             >
-              Create report
+              {m.reviewed.report}
             </button>
             <button type="button" className="button button-text" onClick={() => dispatch({ type: "START_OVER" })}>
-              Start over
+              {m.reviewed.startOver}
             </button>
           </div>
         </div>
@@ -188,10 +178,11 @@ function useAnalysisCleanup(state: FlowState) {
 
 function App({ analysisTiming = DEFAULT_ANALYSIS_TIMING }: AppProps) {
   const [state, dispatch] = useReducer(flowReducer, initialFlowState);
+  const { m } = useI18n();
   useAnalysisCleanup(state);
 
   return (
-    <AppShell step={state.step} notice={noticeFor(state)}>
+    <AppShell step={state.step} notice={noticeFor(state, m)}>
       <StepContent state={state} dispatch={dispatch} timing={analysisTiming} />
     </AppShell>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAdapters } from "../../lib/adapters";
+import { useI18n } from "../../lib/i18n";
 import type { ConsentRecord } from "../consent";
 import { runAnalysis, type AnalysisOutcome, type AnalysisStage } from "./runAnalysis";
 
@@ -26,6 +27,9 @@ interface AnalysisProgressProps {
  */
 export function AnalysisProgress(props: AnalysisProgressProps) {
   const { api } = useAdapters();
+  const { m, locale } = useI18n();
+  // The analysis language is fixed when the request is sent.
+  const requestLocale = useRef(locale);
   const callbacks = useRef(props);
   callbacks.current = props;
   const { jobDescription, image, consent, timing } = props;
@@ -37,6 +41,7 @@ export function AnalysisProgress(props: AnalysisProgressProps) {
       jobDescription,
       image,
       consent,
+      locale: requestLocale.current,
       signal: controller.signal,
       pollIntervalMs: timing.pollIntervalMs,
       timeoutMs: timing.timeoutMs,
@@ -55,13 +60,10 @@ export function AnalysisProgress(props: AnalysisProgressProps) {
       <div className="progress-track" aria-hidden="true">
         <span />
       </div>
-      <p className="hint">
-        Your photo and job description are being processed by the Interview Fit backend. Cancelling stops the analysis
-        and asks the backend to delete the temporary copy.
-      </p>
+      <p className="hint">{m.analysis.hint}</p>
       <div className="actions">
         <button type="button" className="button button-secondary" onClick={() => callbacks.current.onCancel()}>
-          Cancel analysis
+          {m.analysis.cancel}
         </button>
       </div>
     </div>
