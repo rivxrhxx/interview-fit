@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "proxy": "node --experimental-strip-types --disable-warning=ExperimentalWarning services/proxy/src/main.ts",
+    "proxy:youcam": "node --env-file=services/proxy/.env --experimental-strip-types --disable-warning=ExperimentalWarning services/proxy/src/main.ts",
     "demo:photo": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/generate-demo-photo.ts",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json && tsc -p tsconfig.integration.json",

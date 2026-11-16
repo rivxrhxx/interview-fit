@@ -6,8 +6,11 @@ First-party backend that the desktop app calls. It re-validates every upload, ho
 
 ```bash
 npm run proxy          # simulator provider on http://127.0.0.1:8080
+npm run proxy:youcam   # reads services/proxy/.env (git-ignored) for YouCam settings
 npm run test:proxy     # integration suite (no network access)
 ```
+
+For `proxy:youcam`, create `services/proxy/.env` with `INTERVIEW_FIT_PROVIDER=youcam`, `YOUCAM_API_KEY=…`, and optionally `YOUCAM_TRYON_REF_FILE_URL=…`. The file is git-ignored and checked by `npm run verify:secrets`.
 
 Node 22.18+ or 23.6+ runs the TypeScript sources directly through type stripping.
 
