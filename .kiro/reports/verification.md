@@ -12,3 +12,4 @@
 | Task | Requirements | Command | Status | Evidence |
 |---|---|---|---|---|
 | 2.1 Application shell | R8.1 | `npm run verify:fast` | Pass (2026-11-16) | `src/app/AppShell.test.tsx`: 14 tests (state rendering, skip link, focus on step change) |
+| 3.1 Job description input | R1.1, R1.2, R1.3 | `npm run verify:fast` (tests + typecheck) | Pass (2026-11-16) | `src/features/job-posting/*.test.ts(x)`, `src/app/App.test.tsx`: empty, over-limit, no truncation, instruction-like and markup content kept inert |
