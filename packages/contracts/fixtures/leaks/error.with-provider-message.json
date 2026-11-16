@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "PROCESSING_UNAVAILABLE",
+    "message": "Analysis is temporarily unavailable. Try again in a few minutes.",
+    "retryable": true,
+    "correlationId": "req_Pq7Wn2Xc5Rv8Lk1M",
+    "providerMessage": "YouCam upstream 503 at https://provider.invalid/s2s/v1.0/task",
+    "stack": "Error: vendor timeout\n    at /srv/proxy/adapter.ts:12"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "CONSENT_REQUIRED",
+    "message": "Review and agree to the consent step before analysis.",
+    "retryable": false,
+    "correlationId": "req_Mx2Bq6Np9Rt3Yw5U"
+  }
+}

@@ -35,7 +35,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: decline causes zero upload bytes; version changes invalidate consent
   - Verify: privacy test suite
 
-- [ ] 6.1 Define normalized analysis contracts and error codes
+- [x] 6.1 Define normalized analysis contracts and error codes
   - Requirements: R4.1, R4.2, R8.3
   - Verify: contract fixtures
 

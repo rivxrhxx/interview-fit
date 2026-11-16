@@ -1,8 +1,10 @@
+import { CURRENT_CONSENT_VERSION } from "../../lib/api/contracts";
+
 /**
- * Version of the consent text below. Changing what is sent, why, or to whom
- * requires a new version, which invalidates any earlier agreement.
+ * Version of the consent text in ConsentGate. Changing what is sent, why, or to
+ * whom requires a new contract version, which invalidates any earlier agreement.
  */
-export const CONSENT_VERSION = "2026-11-16.v1";
+export const CONSENT_VERSION = CURRENT_CONSENT_VERSION;
 
 /** In-memory record of an explicit agreement. Never persisted. */
 export interface ConsentRecord {

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "IMAGE_INVALID",
+    "message": "Choose a JPEG or PNG image.",
+    "retryable": false,
+    "correlationId": "req_Lc8Vn1Kd4Fs7Gh0J"
+  }
+}
