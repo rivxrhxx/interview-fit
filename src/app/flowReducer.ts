@@ -42,17 +42,31 @@ export interface AnalysisContext extends AnalyzedJob {
 
 type WithPhoto = AnalyzedJob & { image: PreparedImage };
 
+/**
+ * The session's try-on outcome for the report. It survives closing, resetting, or a
+ * later failed attempt, so a preview that was created is never reported as missing (R7.3).
+ */
+export type LastTryOn = { status: "created"; styleId: TryOnStyleId } | { status: "unavailable" } | null;
+
 export type FlowState =
   | { step: "draft"; text: string }
   | { step: "job-reviewed"; job: JobDescription; insight: JobInsight; notice?: DraftNotice }
   | ({ step: "image-ready" } & WithPhoto)
   | ({ step: "consenting" } & WithPhoto)
   | ({ step: "analyzing"; stage: AnalysisStage; attempt: number } & AnalysisContext)
-  | ({ step: "reviewed"; analysis: ReviewedAnalysis } & WithPhoto)
-  | ({ step: "trying-on"; analysis: ReviewedAnalysis; styleId: TryOnStyleId; tryOn: TryOnPhase; attempt: number } & WithPhoto)
+  | ({ step: "reviewed"; analysis: ReviewedAnalysis; lastTryOn: LastTryOn } & WithPhoto)
+  | ({
+      step: "trying-on";
+      analysis: ReviewedAnalysis;
+      styleId: TryOnStyleId;
+      tryOn: TryOnPhase;
+      attempt: number;
+      lastTryOn: LastTryOn;
+    } & WithPhoto)
   | ({
       step: "report-ready";
       analysis: ReviewedAnalysis;
+      lastTryOn: LastTryOn;
       tryOn: TryOnReportStatus;
       /** The style whose preview was created; null when none was. */
       tryOnStyleId: TryOnStyleId | null;
@@ -118,13 +132,23 @@ function recover(state: Extract<FlowState, { step: "error" }>, recovery: Recover
 }
 
 function reportFrom(
-  state: WithPhoto & { analysis: ReviewedAnalysis },
-  tryOn: TryOnReportStatus,
-  tryOnStyleId: TryOnStyleId | null = null,
-): Omit<Extract<FlowState, { step: "report-ready" }>, "generatedAt"> {
+  state: WithPhoto & { analysis: ReviewedAnalysis; lastTryOn: LastTryOn },
+  generatedAt: string,
+): Extract<FlowState, { step: "report-ready" }> {
   // The try-on preview itself is dropped here; only its status goes into the report (R7.1, R6.3).
-  return { step: "report-ready", ...withPhoto(state), analysis: state.analysis, tryOn, tryOnStyleId };
+  const { lastTryOn } = state;
+  const tryOn: TryOnReportStatus = lastTryOn?.status ?? "not-created";
+  const tryOnStyleId = lastTryOn?.status === "created" ? lastTryOn.styleId : null;
+  return { step: "report-ready", ...withPhoto(state), analysis: state.analysis, lastTryOn, tryOn, tryOnStyleId, generatedAt };
 }
+
+/** Back to the guidance for the same analysis, keeping the session's try-on outcome. */
+const backToReview = (state: WithPhoto & { analysis: ReviewedAnalysis; lastTryOn: LastTryOn }): FlowState => ({
+  step: "reviewed",
+  ...withPhoto(state),
+  analysis: state.analysis,
+  lastTryOn: state.lastTryOn,
+});
 
 /** Preselects the first style that suits the posting's formality; never based on the photo (R6.4). */
 function defaultStyle(jobContext: JobContext): TryOnStyleId {
@@ -167,16 +191,29 @@ function tryOnTransition(state: Extract<FlowState, { step: "trying-on" }>, event
         ? { ...state, tryOn: { status: "running" }, attempt: state.attempt + 1 }
         : state;
     case "TRY_ON_SUCCEEDED":
-      return tryOn.status === "running" ? { ...state, tryOn: { status: "ready", preview: event.preview, jobId: event.jobId } } : state;
+      return tryOn.status === "running"
+        ? {
+            ...state,
+            tryOn: { status: "ready", preview: event.preview, jobId: event.jobId },
+            lastTryOn: { status: "created", styleId: state.styleId },
+          }
+        : state;
     case "TRY_ON_FAILED":
-      return tryOn.status === "running" ? { ...state, tryOn: { status: "failed", code: event.code } } : state;
+      // A failed attempt never hides a preview that was already created this session.
+      return tryOn.status === "running"
+        ? {
+            ...state,
+            tryOn: { status: "failed", code: event.code },
+            lastTryOn: state.lastTryOn?.status === "created" ? state.lastTryOn : { status: "unavailable" },
+          }
+        : state;
     case "TRY_ON_CANCELLED":
       return tryOn.status === "running" ? { ...state, tryOn: { status: "idle" } } : state;
     case "TRY_ON_RESET":
       // Reset discards the preview; nothing was persisted (R6.2, R6.3).
       return tryOn.status === "ready" ? { ...state, tryOn: { status: "idle" } } : state;
     case "TRY_ON_CLOSED":
-      return tryOn.status === "running" ? state : { step: "reviewed", ...withPhoto(state), analysis: state.analysis };
+      return tryOn.status === "running" ? state : backToReview(state);
     default:
       return state;
   }
@@ -218,7 +255,7 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
         case "ANALYSIS_PROGRESS":
           return { ...state, stage: event.stage };
         case "ANALYSIS_SUCCEEDED":
-          return { step: "reviewed", ...withPhoto(state), analysis: { jobId: event.jobId, result: event.result } };
+          return { step: "reviewed", ...withPhoto(state), analysis: { jobId: event.jobId, result: event.result }, lastTryOn: null };
         case "ANALYSIS_FAILED":
           return {
             step: "error",
@@ -244,22 +281,20 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
             styleId: defaultStyle(state.jobContext),
             tryOn: { status: "idle" },
             attempt: 0,
+            lastTryOn: state.lastTryOn,
           };
         case "REPORT_REQUESTED":
-          return { ...reportFrom(state, "not-created"), generatedAt: event.generatedAt };
+          return reportFrom(state, event.generatedAt);
         default:
           return state;
       }
     case "trying-on":
-      if (event.type === "REPORT_REQUESTED" && state.tryOn.status !== "running") {
-        const status = state.tryOn.status === "ready" ? "created" : state.tryOn.status === "failed" ? "unavailable" : "not-created";
-        return { ...reportFrom(state, status, status === "created" ? state.styleId : null), generatedAt: event.generatedAt };
-      }
+      if (event.type === "REPORT_REQUESTED" && state.tryOn.status !== "running") return reportFrom(state, event.generatedAt);
       return tryOnTransition(state, event);
     case "report-ready":
       switch (event.type) {
         case "REPORT_CLOSED":
-          return { step: "reviewed", ...withPhoto(state), analysis: state.analysis };
+          return backToReview(state);
         case "START_OVER":
           return reviewedJob(state);
         default:

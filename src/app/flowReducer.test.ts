@@ -5,8 +5,9 @@ import type { PreparedImage } from "../features/capture";
 import { createConsentRecord } from "../features/consent";
 import { validateJobDescription, type JobDescription } from "../features/job-posting";
 import jobAnalysisFixture from "../../packages/contracts/fixtures/job-analysis.succeeded.json";
-import { parseJobAnalysis } from "../lib/api/contracts";
-import { flowReducer, initialFlowState, type FlowState } from "./flowReducer";
+import analysisJobFixture from "../../packages/contracts/fixtures/analysis-job.succeeded.json";
+import { parseAnalysisJob, parseJobAnalysis, type TryOnJobId } from "../lib/api/contracts";
+import { flowReducer, initialFlowState, type FlowEvent, type FlowState } from "./flowReducer";
 
 const jobContext = parseJobAnalysis(jobAnalysisFixture).jobContext;
 
@@ -66,5 +67,84 @@ describe("flowReducer", () => {
     expect(next.step).toBe("job-reviewed");
     expect(next).not.toHaveProperty("image");
     expect(next).toMatchObject({ notice: "consent-declined" });
+  });
+});
+
+describe("try-on status in the report (R7.3)", () => {
+  const analysisJob = parseAnalysisJob(analysisJobFixture);
+  const tryOnId = "to_000000000000000000000000" as TryOnJobId;
+  const GENERATED = "2026-11-17T09:00:00.000Z";
+
+  const run = (state: FlowState, ...events: FlowEvent[]) => events.reduce(flowReducer, state);
+
+  function reviewed(): FlowState {
+    const consenting: FlowState = { step: "consenting", job: job(), jobContext, image };
+    return run(
+      consenting,
+      { type: "CONSENT_GIVEN", consent: createConsentRecord() },
+      { type: "ANALYSIS_SUCCEEDED", jobId: analysisJob.id, result: analysisJob.result! },
+    );
+  }
+
+  const preview = (styleId: "short-bob" | "neat-updo"): FlowEvent[] => [
+    { type: "TRY_ON_STYLE_SELECTED", styleId },
+    { type: "TRY_ON_STARTED" },
+    { type: "TRY_ON_SUCCEEDED", preview: new Blob(["p"]), jobId: tryOnId },
+  ];
+  const failedAttempt: FlowEvent[] = [{ type: "TRY_ON_STARTED" }, { type: "TRY_ON_FAILED", code: "PROCESSING_UNAVAILABLE" }];
+  const report: FlowEvent = { type: "REPORT_REQUESTED", generatedAt: GENERATED };
+
+  it("keeps a created preview after the try-on screen is closed", () => {
+    const state = run(reviewed(), { type: "TRY_ON_OPENED" }, ...preview("short-bob"), { type: "TRY_ON_CLOSED" }, report);
+
+    expect(state).toMatchObject({ step: "report-ready", tryOn: "created", tryOnStyleId: "short-bob" });
+  });
+
+  it("keeps it after a reset and after a later attempt failed", () => {
+    const state = run(
+      reviewed(),
+      { type: "TRY_ON_OPENED" },
+      ...preview("neat-updo"),
+      { type: "TRY_ON_RESET" },
+      { type: "TRY_ON_STYLE_SELECTED", styleId: "short-bob" },
+      ...failedAttempt,
+      report,
+    );
+
+    expect(state).toMatchObject({ step: "report-ready", tryOn: "created", tryOnStyleId: "neat-updo" });
+  });
+
+  it("names the latest created style", () => {
+    const state = run(reviewed(), { type: "TRY_ON_OPENED" }, ...preview("neat-updo"), { type: "TRY_ON_RESET" }, ...preview("short-bob"), report);
+
+    expect(state).toMatchObject({ tryOn: "created", tryOnStyleId: "short-bob" });
+  });
+
+  it("keeps it when the report is closed and opened again", () => {
+    const first = run(reviewed(), { type: "TRY_ON_OPENED" }, ...preview("short-bob"), report);
+    const again = run(first, { type: "REPORT_CLOSED" }, report);
+
+    expect(again).toMatchObject({ step: "report-ready", tryOn: "created", tryOnStyleId: "short-bob" });
+  });
+
+  it("reports a failed try-on as unavailable even after the screen is closed", () => {
+    const state = run(reviewed(), { type: "TRY_ON_OPENED" }, ...failedAttempt, { type: "TRY_ON_CLOSED" }, report);
+
+    expect(state).toMatchObject({ tryOn: "unavailable", tryOnStyleId: null });
+  });
+
+  it("reports no preview when none was made, and forgets it when starting over with a new photo", () => {
+    expect(run(reviewed(), report)).toMatchObject({ tryOn: "not-created", tryOnStyleId: null });
+
+    const startedOver = run(reviewed(), { type: "TRY_ON_OPENED" }, ...preview("short-bob"), { type: "TRY_ON_CLOSED" }, { type: "START_OVER" });
+    const nextPhoto = run(
+      startedOver,
+      { type: "IMAGE_PREPARED", image },
+      { type: "PHOTO_CONFIRMED" },
+      { type: "CONSENT_GIVEN", consent: createConsentRecord() },
+      { type: "ANALYSIS_SUCCEEDED", jobId: analysisJob.id, result: analysisJob.result! },
+      report,
+    );
+    expect(nextPhoto).toMatchObject({ step: "report-ready", tryOn: "not-created", tryOnStyleId: null });
   });
 });
