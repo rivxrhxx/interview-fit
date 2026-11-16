@@ -85,7 +85,7 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
   - Tests first: evidence quoted verbatim, "not stated" fields, prompt-injection text treated as data, Korean postings, notice shown before sending, retry on failure
   - Verify: `npm run verify:fast`
 
-- [ ] 12.3 Implement the Claude AI provider adapter with rules fallback
+- [x] 12.3 Implement the Claude AI provider adapter with rules fallback
   - Requirements: R1.6, R5.3, R5.6
   - Tests first: missing key uses rules, timeout, refusal, malformed JSON, unknown IDs, policy violations, no image data or scores in the prompt, key redaction
   - Verify: `npm run verify:fast`

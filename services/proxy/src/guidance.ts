@@ -41,7 +41,9 @@ function cacheKey(jobDescription: string, locale: Locale): string {
   return createHash("sha256").update(locale).update("\u0000").update(jobDescription).digest("hex");
 }
 
+/** A coarse reason for logs; never a provider message or any job text. */
 function failureKind(error: unknown): string {
+  if (error && typeof error === "object" && "kind" in error && typeof error.kind === "string") return error.kind;
   return error instanceof Error ? error.name : "unknown";
 }
 

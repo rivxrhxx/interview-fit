@@ -27,6 +27,13 @@ const IMAGE_EXTENSIONS = /\.(?:jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i;
 const IMAGE_ALLOWLIST = [/^src-tauri\/icons\//, /^public\//];
 const ENV_FILE = /(?:^|\/)\.env(?:\.[^/]*)?$/;
 const BINARY = /\.(?:icns|ico|png|jpe?g|gif|webp|woff2?|ttf)$/i;
+/** Desktop sources: AI and vendor SDKs or hosts must never appear here (security-privacy steering). */
+const DESKTOP_SOURCE = /^(?:src|src-tauri\/src)\//;
+const DESKTOP_FORBIDDEN = [
+  ["AI SDK import", /@anthropic-ai\//],
+  ["AI provider host", /api\.anthropic\.com/],
+  ["vendor API host", /makeupar\.com|perfectcorp\.com/],
+];
 
 export function scanFiles(root, files) {
   const findings = [];
@@ -46,6 +53,11 @@ export function scanFiles(root, files) {
       if (ALLOWED_FAKES.some((pattern) => pattern.test(line))) return;
       for (const [label, pattern] of SECRET_PATTERNS) {
         if (pattern.test(line)) findings.push(`${file}:${index + 1}: possible ${label}`);
+      }
+      if (DESKTOP_SOURCE.test(file)) {
+        for (const [label, pattern] of DESKTOP_FORBIDDEN) {
+          if (pattern.test(line)) findings.push(`${file}:${index + 1}: ${label} in desktop code`);
+        }
       }
     });
   }
