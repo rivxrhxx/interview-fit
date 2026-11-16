@@ -13,3 +13,4 @@
 |---|---|---|---|---|
 | 2.1 Application shell | R8.1 | `npm run verify:fast` | Pass (2026-11-16) | `src/app/AppShell.test.tsx`: 14 tests (state rendering, skip link, focus on step change) |
 | 3.1 Job description input | R1.1, R1.2, R1.3 | `npm run verify:fast` (tests + typecheck) | Pass (2026-11-16) | `src/features/job-posting/*.test.ts(x)`, `src/app/App.test.tsx`: empty, over-limit, no truncation, instruction-like and markup content kept inert |
+| 4.1 Image selection and preview | R2.2, R2.3, R3.3 | `npm run verify:fast`, `npm run verify:rust` | Pass (2026-11-16) | Frontend: `src/features/capture/*.test.ts(x)`, `src/lib/validation/image.test.ts`, `src/app/App.test.tsx` (unsupported format, oversized, object URL revoke). Rust: `image_prep` 11 tests (signature, 10 MiB, 16 MP header check, malformed input, Exif/GPS removal, orientation). Browser dev fallback (`browserImageAdapter`) is not unit-tested because jsdom has no canvas decoding |

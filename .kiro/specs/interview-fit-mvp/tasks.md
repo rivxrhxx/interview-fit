@@ -20,7 +20,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: empty, excessive, and instruction-like content
   - Verify: frontend test suite and typecheck
 
-- [ ] 4.1 Implement image selection and preview lifecycle
+- [x] 4.1 Implement image selection and preview lifecycle
   - Requirements: R2.2, R2.3, R3.3
   - Tests first: unsupported format, oversized image, object URL cleanup
   - Verify: frontend and Rust tests
