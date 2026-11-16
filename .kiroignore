@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+src-tauri/target/
+coverage/
+*.log
+logs/
+raw-captures/
+temporary-images/
+local-reports/
+*.pem
+*.key
+*.p12
+*.pfx
+.DS_Store

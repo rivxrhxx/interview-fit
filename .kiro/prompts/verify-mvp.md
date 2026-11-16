@@ -1,0 +1,1 @@
+Run every available verification command. Map requirements to tests and actual results in `.kiro/reports/verification.md`. Mark unavailable checks as blocked with the exact missing prerequisite. Never report an unexecuted check as passing.

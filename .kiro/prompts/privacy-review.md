@@ -1,0 +1,1 @@
+Review the current diff for secrets, direct vendor access, image persistence, metadata leakage, unredacted logs, excessive Tauri permissions, unsafe HTML, missing cleanup, and prohibited inference or scoring. Produce release-blocking findings with file references. Do not claim checks were run unless you ran them.

@@ -1,0 +1,1 @@
+Validate the golden path, consent refusal, camera denial, provider timeout, cancellation, reset, explicit export, clean install, fixture provenance, and three-minute narration. Update `.kiro/reports/demo-checklist.md` with pass, fail, or blocked for each item.
