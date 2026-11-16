@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AdaptersProvider } from "../../lib/adapters";
 import type { ImageAdapter } from "../../lib/tauri";
 import { IMAGE_MAX_BYTES } from "../../lib/validation/limits";
+import { createMockAdapters } from "../../test/adapters";
 import { GIF_SIGNATURE, JPEG_SIGNATURE, fileWithReportedSize, syntheticFile } from "../../test/images";
 import { PhotoPicker } from "./PhotoPicker";
 
@@ -13,7 +14,7 @@ function setup(adapter: ImageAdapter = { prepare: vi.fn(async () => new Blob(["j
   const fetchSpy = vi.spyOn(globalThis, "fetch");
   const user = userEvent.setup({ applyAccept: false });
   render(
-    <AdaptersProvider adapters={{ image: adapter }}>
+    <AdaptersProvider adapters={createMockAdapters({ image: adapter })}>
       <PhotoPicker onImageReady={onImageReady} />
     </AdaptersProvider>,
   );
