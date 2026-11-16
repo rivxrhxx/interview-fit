@@ -134,6 +134,28 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
     return new Blob([bytes], { type: actual });
   }
 
+  /**
+   * Creates a job with a fresh Idempotency-Key, retrying once after a network failure
+   * with the same key. If the outcome is unknown (cancelled or lost before the job ID
+   * arrived), the backend may still have created the job, so it is cancelled by key,
+   * which never creates anything, before giving up (R4.4, R4.5).
+   */
+  function createWithKey<T>(path: string, init: RequestInit, parse: (body: unknown) => T): Promise<T> {
+    const headers = new Headers(init.headers);
+    headers.set("Idempotency-Key", crypto.randomUUID());
+    return request(path, { ...init, headers }, parse, 1).catch(async (error: unknown) => {
+      const unknownOutcome = isAbort(error) || (error instanceof ApiRequestError && error.code === "PROCESSING_UNAVAILABLE");
+      if (unknownOutcome) {
+        await fetchImpl(`${options.baseUrl}${path}`, {
+          ...REQUEST_DEFAULTS,
+          method: "DELETE",
+          headers: { "Idempotency-Key": headers.get("Idempotency-Key")! },
+        }).catch(() => undefined);
+      }
+      throw error;
+    });
+  }
+
   async function ignoreMissing(work: Promise<unknown>): Promise<void> {
     try {
       await work;
@@ -163,23 +185,7 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       form.set(ANALYSIS_REQUEST_FIELDS.jobDescription, input.jobDescription);
       form.set(ANALYSIS_REQUEST_FIELDS.image, input.image, "photo.jpg");
       if (input.locale) form.set(ANALYSIS_REQUEST_FIELDS.locale, input.locale);
-      const headers = { "Idempotency-Key": crypto.randomUUID() };
-      return request(API_ROUTES.analysisJobs, { method: "POST", body: form, headers, signal }, parseAnalysisJob, 1).catch(
-        async (error: unknown) => {
-          // Cancelled or lost before the job ID arrived: the backend may still have the
-          // upload, so cancel it by key (never creates anything) before giving up (R4.4).
-          const unknownOutcome =
-            isAbort(error) || (error instanceof ApiRequestError && error.code === "PROCESSING_UNAVAILABLE");
-          if (unknownOutcome) {
-            await fetchImpl(`${options.baseUrl}${API_ROUTES.analysisJobs}`, {
-              ...REQUEST_DEFAULTS,
-              method: "DELETE",
-              headers,
-            }).catch(() => undefined);
-          }
-          throw error;
-        },
-      );
+      return createWithKey(API_ROUTES.analysisJobs, { method: "POST", body: form, signal }, parseAnalysisJob);
     },
 
     getAnalysisJob(id, signal) {
@@ -191,7 +197,7 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
     },
 
     createTryOnJob(input, signal) {
-      return request(
+      return createWithKey(
         API_ROUTES.tryOnJobs,
         {
           method: "POST",

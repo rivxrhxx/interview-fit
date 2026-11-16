@@ -65,7 +65,7 @@ The analysis runs two YouCam tools in parallel, each on its own upload (reusing 
 
 ## Cancellation and retention
 
-- `DELETE /v1/analysis-jobs/{id}` cancels a job, zeroes its image, and deletes every try-on made from it.
+- `DELETE /v1/analysis-jobs/{id}` cancels a job, zeroes its image, and deletes every try-on made from it. Deleting a finished job also deletes its result: the job becomes `cancelled` with no result and disappears after the terminal retention window (R4.7).
 - `DELETE /v1/analysis-jobs` with the upload's `Idempotency-Key` cancels a job whose ID the client never received (cancel during upload). It never creates anything and always answers 204. If the upload is still in flight, the key is remembered for 60 seconds and the job is cancelled before any provider call.
 - Expired jobs are swept on a timer. Their images are zeroed, and try-on results made from them are deleted with them.
 - Requests time out after 30 seconds (10 seconds for headers).
@@ -78,6 +78,8 @@ The analysis runs two YouCam tools in parallel, each on its own upload (reusing 
 - `GET /v1/try-on-styles/{styleId}/thumbnail` serves a style's example image. The backend finds the template's thumbnail in YouCam's template list, downloads it, strips its metadata, and keeps it in memory. Only curated style IDs reach the provider.
 - The simulator draws illustrated hairstyles (no user pixels, no licensed assets) for deterministic demos and thumbnails.
 - `DELETE /v1/try-on-jobs/{id}` cancels a running try-on or deletes a finished result (reset or another style). Results never outlive the analysis job they came from.
+- `POST /v1/try-on-jobs` takes an `Idempotency-Key` like uploads do: a repeat returns the same try-on. `DELETE /v1/try-on-jobs` with that key cancels a try-on whose ID the desktop never received, and a cancel that arrives first stops the try-on before any provider call (R4.5). It never creates anything and always answers 204.
+- Each analysis has at most one try-on: a new style replaces the previous one. A try-on reserves twice the photo size (the provider's copy plus an expected result) before it starts, and the real result size is checked again before it is stored. Results that do not fit within `MAX_RETAINED_BYTES` are zeroed and the try-on fails with `PROCESSING_UNAVAILABLE` (R4.6).
 
 YouCam documents that hair-transfer task IDs stay queryable for 24 hours and result URLs for 2 hours. The proxy cannot delete provider-side data, so the consent text refers to the provider's own retention terms instead of promising a deletion time.
 

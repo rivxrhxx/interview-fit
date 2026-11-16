@@ -124,7 +124,7 @@ From an external review before submission.
   - Tests first: reservation refused before start, oversized result discarded, retained bytes never exceed the limit, one try-on in progress per analysis, global in-progress cap
   - Verify: `npm run verify:fast`
 
-- [ ] 13.4 Cancel try-ons created before the desktop learned their ID
+- [x] 13.4 Cancel try-ons created before the desktop learned their ID
   - Requirements: R4.5
   - Tests first: repeated key returns the same job, DELETE by key before and after creation, connection closed before the response, desktop cancels by key on abort
   - Verify: `npm run verify:fast`

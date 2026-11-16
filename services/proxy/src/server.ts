@@ -21,6 +21,7 @@ import {
 import type { ProxyConfig } from "./config.ts";
 import { createAdvisor, type AiWriter } from "./guidance.ts";
 import { BodyTooLargeError, parseMultipart, readBody } from "./http/body.ts";
+import { createIdempotencyRegistry, requestKey } from "./http/idempotency.ts";
 import { newCorrelationId } from "./ids.ts";
 import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
 import { createAnalysisJobs, toErrorCode, withDeadline } from "./jobs/analysisJobs.ts";
@@ -37,9 +38,6 @@ const MAX_JSON_BODY_BYTES = 4 * 1024;
 /** A maximum-length job description in UTF-8 plus JSON framing. */
 const MAX_JOB_ANALYSIS_BODY_BYTES = 64 * 1024;
 const TRY_ON_STYLE_IDS: readonly string[] = TRY_ON_STYLES.map((style) => style.id);
-
-/** Client-generated retry key; a repeat within the job's lifetime returns the same job. */
-const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 
 export interface ProxyDeps {
   config: ProxyConfig;
@@ -165,16 +163,9 @@ export function createProxy(deps: ProxyDeps): Proxy {
   // Text-only analyses and catalog thumbnails get their own buckets so they never use up uploads.
   const analysisLimiter = createRateLimiter({ limit: config.rateLimitPerMinute * 3, windowMs: 60_000, now });
   const thumbnailLimiter = createRateLimiter({ limit: 120, windowMs: 60_000, now });
-  const idempotency = new Map<string, string>();
-  /** Keys cancelled before their upload finished; the job is cancelled as soon as it exists. */
-  const tombstones = new Map<string, number>();
-  const TOMBSTONE_MS = 60_000;
-
-  function idempotencyKey(request: IncomingMessage): string | null {
-    const header = request.headers["idempotency-key"];
-    const key = Array.isArray(header) ? header[0] : header;
-    return key && IDEMPOTENCY_KEY.test(key) ? `${request.socket.remoteAddress ?? "unknown"}|${key}` : null;
-  }
+  // Retry keys per job kind; each also remembers cancels that arrived before the job existed.
+  const analysisKeys = createIdempotencyRegistry(now);
+  const tryOnKeys = createIdempotencyRegistry(now);
   const allowedOrigins = new Set(config.allowedOrigins);
 
   function send(response: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -213,8 +204,8 @@ export function createProxy(deps: ProxyDeps): Proxy {
   }
 
   async function createJob(request: IncomingMessage): Promise<AnalysisJobRecord> {
-    const key = idempotencyKey(request);
-    const existing = key ? store.get(idempotency.get(key) ?? "") : undefined;
+    const key = requestKey(request);
+    const existing = key ? store.get(analysisKeys.lookup(key) ?? "") : undefined;
     if (key && existing) {
       // A retried request: never create a second job or a second provider call.
       request.resume();
@@ -269,12 +260,9 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const requestedLocale = form.get(ANALYSIS_REQUEST_FIELDS.locale);
     const locale = isLocale(requestedLocale) ? requestedLocale : "en";
     const record = jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info, locale });
-    if (key) idempotency.set(key, record.id);
-    if (key && tombstones.has(key)) {
-      // The client already cancelled this upload: stop before any provider call.
-      tombstones.delete(key);
-      jobs.cancel(record.id);
-    }
+    if (key) analysisKeys.remember(key, record.id);
+    // The client already cancelled this upload: stop before any provider call.
+    if (key && analysisKeys.takeTombstone(key)) jobs.cancel(record.id);
     return record;
   }
 
@@ -328,6 +316,14 @@ export function createProxy(deps: ProxyDeps): Proxy {
   }
 
   async function createTryOn(request: IncomingMessage): Promise<TryOnJobRecord> {
+    const key = requestKey(request);
+    const existing = key ? tryOns?.get(tryOnKeys.lookup(key) ?? "") : undefined;
+    if (key && existing) {
+      // A retried request: never a second try-on or a second provider call.
+      request.resume();
+      return existing;
+    }
+
     const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
     if (!decision.allowed) {
       request.resume();
@@ -350,13 +346,18 @@ export function createProxy(deps: ProxyDeps): Proxy {
     // Only a successful, still-retained, consented analysis image can be used (R6.1).
     if (analysis.state !== "succeeded" || !analysis.image || !analysis.imageInfo) throw new HttpError("JOB_NOT_FOUND");
     if (!tryOns) throw new HttpError("PROCESSING_UNAVAILABLE");
+    let record: TryOnJobRecord;
     try {
-      return tryOns.create(analysis, fields.styleId as TryOnStyleId);
+      record = tryOns.create(analysis, fields.styleId as TryOnStyleId);
     } catch (error) {
       if (!(error instanceof TryOnCapacityError)) throw error;
       logger.log({ level: "warn", event: "try_on_refused", reason: error.reason });
       throw new HttpError("PROCESSING_UNAVAILABLE");
     }
+    if (key) tryOnKeys.remember(key, record.id);
+    // The client already cancelled this request: stop before any provider call (R4.5).
+    if (key && tryOnKeys.takeTombstone(key)) tryOns.cancel(record.id);
+    return record;
   }
 
   function sendImage(response: ServerResponse, bytes: Uint8Array, mimeType: string, headers: Record<string, string>) {
@@ -390,14 +391,14 @@ export function createProxy(deps: ProxyDeps): Proxy {
         // Cancel by Idempotency-Key, for a client that cancelled before it learned the job ID.
         // Never creates anything and reveals nothing: always 204.
         request.resume();
-        const key = idempotencyKey(request);
+        const key = requestKey(request);
         if (key) {
-          const existing = store.get(idempotency.get(key) ?? "");
+          const existing = store.get(analysisKeys.lookup(key) ?? "");
           if (existing) {
             jobs.cancel(existing.id);
             tryOns?.removeForAnalysis(existing.id);
           } else {
-            tombstones.set(key, now() + TOMBSTONE_MS);
+            analysisKeys.tombstone(key);
           }
         }
         response.writeHead(204, { ...cors, "Cache-Control": "no-store" });
@@ -443,11 +444,35 @@ export function createProxy(deps: ProxyDeps): Proxy {
     }
 
     if (path === ROUTES.tryOnCollection) {
+      if (method === "DELETE") {
+        // Cancel by Idempotency-Key, for a client that cancelled before it learned the
+        // try-on ID (R4.5). Never creates anything and reveals nothing: always 204.
+        request.resume();
+        const key = requestKey(request);
+        if (key) {
+          const existing = tryOns?.get(tryOnKeys.lookup(key) ?? "");
+          if (existing) tryOns?.cancel(existing.id);
+          else tryOnKeys.tombstone(key);
+        }
+        response.writeHead(204, { ...cors, "Cache-Control": "no-store" });
+        response.end();
+        return "/v1/try-on-jobs";
+      }
       if (method !== "POST") {
         request.resume();
-        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, OPTIONS" } });
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, DELETE, OPTIONS" } });
       }
-      send(response, 202, toPublicTryOn(await createTryOn(request)), cors);
+      const record = await createTryOn(request);
+      // Gone before it learned the try-on ID: nobody else can cancel it, so cancel it here.
+      const socket = request.socket;
+      if (socket.destroyed || socket.readableEnded || response.destroyed) {
+        tryOns?.cancel(record.id);
+        return "/v1/try-on-jobs";
+      }
+      response.once("close", () => {
+        if (!response.writableFinished) tryOns?.cancel(record.id);
+      });
+      send(response, 202, toPublicTryOn(record), cors);
       return "/v1/try-on-jobs";
     }
 
@@ -560,8 +585,8 @@ export function createProxy(deps: ProxyDeps): Proxy {
           limiter.prune();
           analysisLimiter.prune();
           thumbnailLimiter.prune();
-          for (const [key, id] of idempotency) if (!store.peek(id)) idempotency.delete(key);
-          for (const [key, expiresAt] of tombstones) if (expiresAt <= now()) tombstones.delete(key);
+          analysisKeys.prune((id) => store.peek(id) !== undefined);
+          tryOnKeys.prune((id) => tryOns?.get(id) !== undefined);
         }, config.sweepIntervalMs)
       : undefined;
   sweeper?.unref();

@@ -107,6 +107,11 @@ export function createTryOnJobs(options: {
   }
 
   async function process(record: TryOnJobRecord, source: Uint8Array, info: NonNullable<AnalysisJobRecord["imageInfo"]>) {
+    // Cancelled before processing started (for example, cancel-by-key that arrived first).
+    if (record.state !== "queued") {
+      source.fill(0);
+      return;
+    }
     const controller = new AbortController();
     record.abort = controller;
     record.state = "processing";
