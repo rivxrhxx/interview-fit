@@ -15,7 +15,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: keyboard navigation and state rendering
   - Verify: `npm run verify:fast`
 
-- [ ] 3.1 Implement job-description input and validation
+- [x] 3.1 Implement job-description input and validation
   - Requirements: R1.1, R1.2, R1.3
   - Tests first: empty, excessive, and instruction-like content
   - Verify: frontend test suite and typecheck
