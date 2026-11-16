@@ -16,8 +16,8 @@ const SECRET_PATTERNS = [
   // A literal bearer credential (not a template such as `Bearer ${...}` or a <placeholder>).
   ["bearer token", /Authorization:\s*["']?Bearer\s+(?![<$`{])[A-Za-z0-9._~+/-]{20,}/i],
   // Env-style assignment (`YOUCAM_API_KEY=value`) or a quoted literal in code; constant references are fine.
-  ["assigned provider key", /^\s*(?:export\s+)?(?:YOUCAM|PERFECTCORP)_(?:API_)?KEY\s*=\s*[^\s#"']+/],
-  ["provider key literal", /\b(?:YOUCAM|PERFECTCORP)_(?:API_)?KEY["']?\s*[:=]\s*["'](?![<$`{])[^"'\s]+["']/],
+  ["assigned provider key", /^\s*(?:export\s+)?(?:YOUCAM|PERFECTCORP|ANTHROPIC)_(?:API_)?KEY\s*=\s*[^\s#"']+/],
+  ["provider key literal", /\b(?:YOUCAM|PERFECTCORP|ANTHROPIC)_(?:API_)?KEY["']?\s*[:=]\s*["'](?![<$`{])[^"'\s]+["']/],
 ];
 
 // Values in test fixtures that are deliberately fake.
