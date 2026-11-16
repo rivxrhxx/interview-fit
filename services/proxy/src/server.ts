@@ -6,10 +6,14 @@ import {
   ERROR_MESSAGES,
   ERROR_POLICY,
   IMAGE_MAX_BYTES,
+  TRY_ON_JOB_ID_PATTERN,
+  TRY_ON_STYLES,
   checkJobDescription,
   type AnalysisJob,
   type AnalysisJobId,
   type ErrorCode,
+  type TryOnJob,
+  type TryOnStyleId,
 } from "../../../packages/contracts/src/index.ts";
 import type { ProxyConfig } from "./config.ts";
 import type { GuidanceEngine } from "./guidance.ts";
@@ -19,12 +23,16 @@ import { newCorrelationId } from "./ids.ts";
 import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
 import { createAnalysisJobs } from "./jobs/analysisJobs.ts";
 import { createJobStore, type AnalysisJobRecord, type JobStore } from "./jobs/store.ts";
+import { createTryOnJobs, type TryOnJobRecord } from "./jobs/tryOnJobs.ts";
 import type { Logger } from "./logger.ts";
-import type { AnalysisProvider } from "./providers/types.ts";
+import type { AnalysisProvider, TryOnProvider } from "./providers/types.ts";
 import { createRateLimiter } from "./rateLimit.ts";
 
 /** Upload limit plus room for the job description and multipart framing. */
 const MAX_BODY_BYTES = IMAGE_MAX_BYTES + 128 * 1024;
+
+const MAX_JSON_BODY_BYTES = 4 * 1024;
+const TRY_ON_STYLE_IDS: readonly string[] = TRY_ON_STYLES.map((style) => style.id);
 
 /** Client-generated retry key; a repeat within the job's lifetime returns the same job. */
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
@@ -32,6 +40,8 @@ const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 export interface ProxyDeps {
   config: ProxyConfig;
   provider: AnalysisProvider;
+  /** Optional: without it, try-on requests fail with PROCESSING_UNAVAILABLE. */
+  tryOnProvider?: TryOnProvider;
   logger: Logger;
   guidance?: GuidanceEngine;
   now?: () => number;
@@ -59,6 +69,9 @@ class HttpError extends Error {
 const ROUTES = {
   collection: "/v1/analysis-jobs",
   item: /^\/v1\/analysis-jobs\/([^/]+)$/,
+  tryOnCollection: "/v1/try-on-jobs",
+  tryOnItem: /^\/v1\/try-on-jobs\/([^/]+)$/,
+  tryOnResult: /^\/v1\/try-on-jobs\/([^/]+)\/result$/,
 };
 
 function iso(ms: number) {
@@ -85,6 +98,25 @@ function toPublicJob(record: AnalysisJobRecord): AnalysisJob {
   };
 }
 
+function toPublicTryOn(record: TryOnJobRecord): TryOnJob {
+  return {
+    id: record.id,
+    state: record.state,
+    styleId: record.styleId,
+    createdAt: iso(record.createdAt),
+    expiresAt: iso(record.expiresAt),
+    error:
+      record.state === "failed" && record.error
+        ? {
+            code: record.error,
+            message: ERROR_MESSAGES[record.error],
+            retryable: ERROR_POLICY[record.error].retryable,
+            correlationId: record.correlationId,
+          }
+        : null,
+  };
+}
+
 export function createProxy(deps: ProxyDeps): Proxy {
   const { config, logger } = deps;
   const now = deps.now ?? Date.now;
@@ -99,6 +131,16 @@ export function createProxy(deps: ProxyDeps): Proxy {
     terminalRetentionMs: config.terminalRetentionMs,
     providerTimeoutMs: config.providerTimeoutMs,
   });
+  const tryOns = deps.tryOnProvider
+    ? createTryOnJobs({
+        provider: deps.tryOnProvider,
+        logger,
+        now,
+        jobTtlMs: config.jobTtlMs,
+        terminalRetentionMs: config.terminalRetentionMs,
+        providerTimeoutMs: config.providerTimeoutMs,
+      })
+    : null;
   const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
   const idempotency = new Map<string, string>();
 
@@ -195,6 +237,50 @@ export function createProxy(deps: ProxyDeps): Proxy {
     return record;
   }
 
+  function lookupTryOn(rawId: string): TryOnJobRecord {
+    const record = TRY_ON_JOB_ID_PATTERN.test(rawId) ? tryOns?.get(rawId) : undefined;
+    if (!record) throw new HttpError("JOB_NOT_FOUND");
+    return record;
+  }
+
+  async function createTryOn(request: IncomingMessage): Promise<TryOnJobRecord> {
+    const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
+    if (!decision.allowed) {
+      request.resume();
+      throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
+    }
+    if (!(request.headers["content-type"] ?? "").startsWith("application/json")) {
+      request.resume();
+      throw new HttpError("REQUEST_INVALID");
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(new TextDecoder().decode(await readBody(request, MAX_JSON_BODY_BYTES)));
+    } catch {
+      throw new HttpError("REQUEST_INVALID");
+    }
+    const fields = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+    if (typeof fields.styleId !== "string" || !TRY_ON_STYLE_IDS.includes(fields.styleId)) throw new HttpError("REQUEST_INVALID");
+    if (typeof fields.analysisJobId !== "string") throw new HttpError("JOB_NOT_FOUND");
+    const analysis = lookup(fields.analysisJobId);
+    // Only a successful, still-retained, consented analysis image can be used (R6.1).
+    if (analysis.state !== "succeeded" || !analysis.image || !analysis.imageInfo) throw new HttpError("JOB_NOT_FOUND");
+    if (!tryOns) throw new HttpError("PROCESSING_UNAVAILABLE");
+    return tryOns.create(analysis, fields.styleId as TryOnStyleId);
+  }
+
+  function sendImage(response: ServerResponse, bytes: Uint8Array, mimeType: string, headers: Record<string, string>) {
+    response.writeHead(200, {
+      "Content-Type": mimeType,
+      "Content-Length": bytes.length,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": "inline",
+      ...headers,
+    });
+    response.end(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  }
+
   async function route(request: IncomingMessage, response: ServerResponse, cors: Record<string, string>) {
     const path = new URL(request.url ?? "/", "http://proxy.local").pathname;
     const method = request.method ?? "GET";
@@ -223,6 +309,40 @@ export function createProxy(deps: ProxyDeps): Proxy {
         throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, DELETE, OPTIONS" } });
       }
       return "/v1/analysis-jobs/:id";
+    }
+
+    if (path === ROUTES.tryOnCollection) {
+      if (method !== "POST") {
+        request.resume();
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, OPTIONS" } });
+      }
+      send(response, 202, toPublicTryOn(await createTryOn(request)), cors);
+      return "/v1/try-on-jobs";
+    }
+
+    const tryOnResult = ROUTES.tryOnResult.exec(path);
+    if (tryOnResult) {
+      request.resume();
+      if (method !== "GET") throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, OPTIONS" } });
+      const record = lookupTryOn(tryOnResult[1]);
+      if (record.state !== "succeeded" || !record.result) throw new HttpError("JOB_NOT_FOUND");
+      sendImage(response, record.result.bytes, record.result.mimeType, cors);
+      return "/v1/try-on-jobs/:id/result";
+    }
+
+    const tryOnItem = ROUTES.tryOnItem.exec(path);
+    if (tryOnItem) {
+      request.resume();
+      if (method === "GET") {
+        send(response, 200, toPublicTryOn(lookupTryOn(tryOnItem[1])), cors);
+      } else if (method === "DELETE") {
+        const record = tryOns?.cancel(lookupTryOn(tryOnItem[1]).id);
+        if (!record) throw new HttpError("JOB_NOT_FOUND");
+        send(response, 200, toPublicTryOn(record), cors);
+      } else {
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, DELETE, OPTIONS" } });
+      }
+      return "/v1/try-on-jobs/:id";
     }
 
     request.resume();
@@ -276,6 +396,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
     config.sweepIntervalMs > 0
       ? setInterval(() => {
           store.sweep();
+          tryOns?.sweep();
           limiter.prune();
           for (const [key, id] of idempotency) if (!store.peek(id)) idempotency.delete(key);
         }, config.sweepIntervalMs)
@@ -287,6 +408,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
     store,
     shutdown() {
       if (sweeper) clearInterval(sweeper);
+      tryOns?.clear();
       store.clear();
     },
   };

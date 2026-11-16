@@ -1,0 +1,13 @@
+{
+  "id": "to_4Gv8Kc1Mz6Pw3Rx9Lt2Hd7",
+  "state": "failed",
+  "styleId": "navy-blazer",
+  "createdAt": "2026-11-16T09:02:00.000Z",
+  "expiresAt": "2026-11-16T09:03:00.000Z",
+  "error": {
+    "code": "IMAGE_UNSUITABLE",
+    "message": "This photo could not be used for the preview. A well-lit photo showing your head and shoulders works best.",
+    "retryable": false,
+    "correlationId": "req_Tq2Wm8Zr4Kp6Lx1N"
+  }
+}

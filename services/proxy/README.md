@@ -25,6 +25,8 @@ All settings come from the backend environment. Never put provider credentials i
 | `YOUCAM_API_KEY` | (none) | Required for `youcam`. Read only by the proxy, wrapped in a redacting `Secret` |
 | `YOUCAM_API_BASE_URL` | `https://yce-api-01.makeupar.com` | Must be https |
 | `YOUCAM_POLL_INTERVAL_MS` | `2000` | Status polling interval |
+| `YOUCAM_TRYON_REF_FILE_URL` | (none) | https URL of the licensed navy-blazer garment image for the curated try-on. Without it, try-on requests fail with `PROCESSING_UNAVAILABLE` and no provider call is made |
+| `YOUCAM_TRYON_GARMENT_CATEGORY` | `outer` | cloth-v4 `garment_category`: `outer`, `upper_body`, `full_body`, or `auto` |
 | `PROVIDER_TIMEOUT_MS` | `45000` | Hard deadline per analysis |
 | `JOB_TTL_MS` | `900000` | How long a finished job and its image are kept for try-on |
 | `TERMINAL_RETENTION_MS` | `60000` | How long a failed or cancelled job record (without image) stays readable |
@@ -39,6 +41,14 @@ YouCam's analysis tools are skin analysis (dermatological, excluded by the produ
 - Task creation is never retried, so a transient error cannot charge units twice. Only status reads are retried.
 - The API key is sent only to the configured API host, never to the pre-signed upload URL.
 - Provider file IDs, task IDs, result URLs, and messages stay inside the adapter.
+
+## Virtual try-on
+
+`POST /v1/try-on-jobs` takes `{ analysisJobId, styleId }` and reuses the temporary image of a successful, consented analysis job, so nothing is uploaded again. The only style is `navy-blazer` (R6.1).
+
+- The simulator returns a procedurally drawn illustration (no user pixels, no licensed assets) for deterministic demos.
+- The YouCam adapter calls `cloth-v4` with the operator-configured garment image. It downloads the result on the backend, validates it, strips its metadata, and serves it from `GET /v1/try-on-jobs/{id}/result`. The provider's result URL is never forwarded.
+- `DELETE /v1/try-on-jobs/{id}` cancels a running try-on or deletes a finished result (reset). Results never outlive the analysis job they came from.
 
 YouCam documents that task results stay queryable for 24 hours and result URLs for 2 hours. The proxy cannot delete provider-side data, so the consent text refers to the provider's own retention terms instead of promising a deletion time.
 

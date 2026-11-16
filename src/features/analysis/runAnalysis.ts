@@ -1,4 +1,5 @@
 import { ApiRequestError, type ApiClient } from "../../lib/api";
+import { PollCancelled as Cancelled, abortableSleep } from "../../lib/api/polling";
 import { TERMINAL_JOB_STATES, type AnalysisJob, type AnalysisJobId, type AnalysisResult, type ErrorCode } from "../../lib/api/contracts";
 import { isConsentCurrent, type ConsentRecord } from "../consent";
 
@@ -25,23 +26,6 @@ export interface RunAnalysisOptions {
 
 /** Consecutive polling failures tolerated before giving up. */
 const MAX_POLL_FAILURES = 2;
-
-class Cancelled extends Error {}
-
-function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) return reject(new Cancelled());
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(new Cancelled());
-      },
-      { once: true },
-    );
-  });
-}
 
 function errorCode(error: unknown): ErrorCode {
   return error instanceof ApiRequestError ? error.code : "INTERNAL_ERROR";

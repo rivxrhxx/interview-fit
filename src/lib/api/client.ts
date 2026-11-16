@@ -5,10 +5,15 @@ import {
   ERROR_MESSAGES,
   parseAnalysisJob,
   parseApiErrorBody,
+  parseTryOnJob,
   type AnalysisJob,
   type AnalysisJobId,
   type ErrorCode,
+  type TryOnJob,
+  type TryOnJobId,
+  type TryOnRequest,
 } from "./contracts";
+import { sniffImageType } from "../validation/image";
 
 export class ApiRequestError extends Error {
   readonly code: ErrorCode;
@@ -33,6 +38,11 @@ export interface ApiClient {
   createAnalysisJob(input: CreateAnalysisJobInput, signal?: AbortSignal): Promise<AnalysisJob>;
   getAnalysisJob(id: AnalysisJobId, signal?: AbortSignal): Promise<AnalysisJob>;
   cancelAnalysisJob(id: AnalysisJobId): Promise<void>;
+  createTryOnJob(input: TryOnRequest, signal?: AbortSignal): Promise<TryOnJob>;
+  getTryOnJob(id: TryOnJobId, signal?: AbortSignal): Promise<TryOnJob>;
+  /** Result image held in memory only; never written to storage implicitly (R6.3). */
+  getTryOnResult(id: TryOnJobId, signal?: AbortSignal): Promise<Blob>;
+  cancelTryOnJob(id: TryOnJobId): Promise<void>;
 }
 
 const REQUEST_DEFAULTS: RequestInit = {
@@ -91,6 +101,16 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
     }
   }
 
+  async function ignoreMissing(work: Promise<unknown>): Promise<void> {
+    try {
+      await work;
+    } catch (error) {
+      // Already expired or removed: nothing left to clean up.
+      if (error instanceof ApiRequestError && error.code === "JOB_NOT_FOUND") return;
+      throw error;
+    }
+  }
+
   return {
     createAnalysisJob(input, signal) {
       const form = new FormData();
@@ -105,14 +125,50 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       return request(API_ROUTES.analysisJob(id), { method: "GET", signal }, parseAnalysisJob);
     },
 
-    async cancelAnalysisJob(id) {
+    cancelAnalysisJob(id) {
+      return ignoreMissing(request(API_ROUTES.analysisJob(id), { method: "DELETE" }, parseAnalysisJob));
+    },
+
+    createTryOnJob(input, signal) {
+      return request(
+        API_ROUTES.tryOnJobs,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ analysisJobId: input.analysisJobId, styleId: input.styleId }),
+          signal,
+        },
+        parseTryOnJob,
+      );
+    },
+
+    getTryOnJob(id, signal) {
+      return request(API_ROUTES.tryOnJob(id), { method: "GET", signal }, parseTryOnJob);
+    },
+
+    async getTryOnResult(id, signal) {
+      let response: Response;
       try {
-        await request(API_ROUTES.analysisJob(id), { method: "DELETE" }, parseAnalysisJob);
+        response = await fetchImpl(`${options.baseUrl}${API_ROUTES.tryOnResult(id)}`, {
+          ...REQUEST_DEFAULTS,
+          method: "GET",
+          signal,
+        });
       } catch (error) {
-        // Already expired or removed: nothing left to clean up.
-        if (error instanceof ApiRequestError && error.code === "JOB_NOT_FOUND") return;
-        throw error;
+        if (isAbort(error)) throw error;
+        throw new ApiRequestError("PROCESSING_UNAVAILABLE");
       }
+      if (!response.ok) throw new ApiRequestError(response.status === 404 ? "JOB_NOT_FOUND" : "INTERNAL_ERROR");
+      const declared = response.headers.get("content-type") ?? "";
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const actual = sniffImageType(bytes);
+      // Only JPEG or PNG whose bytes match the declared type is rendered (no SVG or HTML).
+      if (!actual || !declared.startsWith(actual)) throw new ApiRequestError("INTERNAL_ERROR");
+      return new Blob([bytes], { type: actual });
+    },
+
+    cancelTryOnJob(id) {
+      return ignoreMissing(request(API_ROUTES.tryOnJob(id), { method: "DELETE" }, parseTryOnJob));
     },
   };
 }

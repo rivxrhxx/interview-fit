@@ -4,9 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import leakedJob from "../../../packages/contracts/fixtures/leaks/analysis-job.with-provider-fields.json";
 import queued from "../../../packages/contracts/fixtures/analysis-job.queued.json";
 import rateLimited from "../../../packages/contracts/fixtures/error.rate-limited.json";
+import tryOnSucceeded from "../../../packages/contracts/fixtures/try-on-job.succeeded.json";
 import { ApiRequestError, createHttpApiClient } from "./client";
 import { resolveApiBaseUrl } from "./config";
-import type { AnalysisJobId } from "./contracts";
+import type { AnalysisJobId, TryOnJobId } from "./contracts";
 
 const BASE = "http://localhost:8080";
 const JOB_ID = queued.id as AnalysisJobId;
@@ -115,6 +116,41 @@ describe("createHttpApiClient", () => {
 
     await expect(clientWith(fetchMock).cancelAnalysisJob(JOB_ID)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(`${BASE}/v1/analysis-jobs/${JOB_ID}`, expect.objectContaining({ method: "DELETE" }));
+  });
+});
+
+describe("try-on endpoints", () => {
+  const TRY_ON_ID = tryOnSucceeded.id as TryOnJobId;
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+
+  it("posts the curated style for a consented analysis job as JSON", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ...tryOnSucceeded, state: "queued" }, 202));
+
+    const job = await clientWith(fetchMock).createTryOnJob({ analysisJobId: JOB_ID, styleId: "navy-blazer" });
+
+    expect(job.styleId).toBe("navy-blazer");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${BASE}/v1/try-on-jobs`);
+    expect(JSON.parse(init.body as string)).toEqual({ analysisJobId: JOB_ID, styleId: "navy-blazer" });
+    expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+  });
+
+  it("returns the result as an in-memory image blob after checking its type and signature", async () => {
+    const fetchMock = vi.fn(async () => new Response(PNG, { status: 200, headers: { "Content-Type": "image/png" } }));
+
+    const blob = await clientWith(fetchMock).getTryOnResult(TRY_ON_ID);
+
+    expect(blob.type).toBe("image/png");
+    expect(fetchMock).toHaveBeenCalledWith(`${BASE}/v1/try-on-jobs/${TRY_ON_ID}/result`, expect.objectContaining({ method: "GET" }));
+  });
+
+  it.each([
+    ["an SVG", new Response("<svg/>", { status: 200, headers: { "Content-Type": "image/svg+xml" } })],
+    ["mislabeled bytes", new Response("<html>", { status: 200, headers: { "Content-Type": "image/png" } })],
+  ])("rejects %s as the result", async (_label, response) => {
+    await expect(clientWith(vi.fn(async () => response)).getTryOnResult(TRY_ON_ID)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+    });
   });
 });
 

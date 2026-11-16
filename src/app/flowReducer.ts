@@ -1,12 +1,18 @@
-import type { AnalysisJobId, AnalysisResult, ErrorCode, Recovery } from "../lib/api/contracts";
+import type { AnalysisJobId, AnalysisResult, ErrorCode, Recovery, TryOnJobId } from "../lib/api/contracts";
 import type { AnalysisStage } from "../features/analysis";
 import type { PreparedImage } from "../features/capture";
+import type { TryOnPhase } from "../features/try-on";
 import { isConsentCurrent, type ConsentRecord } from "../features/consent";
 import type { JobDescription } from "../features/job-posting";
 
 export type JobDraft = { status: "editing"; text: string } | { status: "saved"; value: JobDescription };
 
 export type DraftNotice = "consent-declined";
+
+export interface ReviewedAnalysis {
+  jobId: AnalysisJobId;
+  result: AnalysisResult;
+}
 
 export interface AnalysisContext {
   job: JobDescription;
@@ -19,11 +25,14 @@ export type FlowState =
   | { step: "image-ready"; job: JobDescription; image: PreparedImage }
   | { step: "consenting"; job: JobDescription; image: PreparedImage }
   | ({ step: "analyzing"; stage: AnalysisStage; attempt: number } & AnalysisContext)
+  | { step: "reviewed"; job: JobDescription; image: PreparedImage; analysis: ReviewedAnalysis }
   | {
-      step: "reviewed";
+      step: "trying-on";
       job: JobDescription;
       image: PreparedImage;
-      analysis: { jobId: AnalysisJobId; result: AnalysisResult };
+      analysis: ReviewedAnalysis;
+      tryOn: TryOnPhase;
+      attempt: number;
     }
   | { step: "error"; code: ErrorCode; context: AnalysisContext; attempt: number };
 
@@ -40,7 +49,14 @@ export type FlowEvent =
   | { type: "ANALYSIS_FAILED"; code: ErrorCode }
   | { type: "ANALYSIS_CANCELLED" }
   | { type: "RECOVERY_SELECTED"; recovery: Recovery }
-  | { type: "START_OVER" };
+  | { type: "START_OVER" }
+  | { type: "TRY_ON_OPENED" }
+  | { type: "TRY_ON_STARTED" }
+  | { type: "TRY_ON_SUCCEEDED"; preview: Blob; jobId: TryOnJobId }
+  | { type: "TRY_ON_FAILED"; code: ErrorCode }
+  | { type: "TRY_ON_CANCELLED" }
+  | { type: "TRY_ON_RESET" }
+  | { type: "TRY_ON_CLOSED" };
 
 export const initialFlowState: FlowState = { step: "draft", job: { status: "editing", text: "" } };
 
@@ -61,6 +77,31 @@ function recover(state: Extract<FlowState, { step: "error" }>, recovery: Recover
     case "choose-another-image":
     case "start-over":
       return savedDraft(job);
+  }
+}
+
+function tryOnTransition(state: Extract<FlowState, { step: "trying-on" }>, event: FlowEvent): FlowState {
+  const { tryOn } = state;
+  switch (event.type) {
+    case "TRY_ON_STARTED":
+      return tryOn.status === "idle" || tryOn.status === "failed"
+        ? { ...state, tryOn: { status: "running" }, attempt: state.attempt + 1 }
+        : state;
+    case "TRY_ON_SUCCEEDED":
+      return tryOn.status === "running" ? { ...state, tryOn: { status: "ready", preview: event.preview, jobId: event.jobId } } : state;
+    case "TRY_ON_FAILED":
+      return tryOn.status === "running" ? { ...state, tryOn: { status: "failed", code: event.code } } : state;
+    case "TRY_ON_CANCELLED":
+      return tryOn.status === "running" ? { ...state, tryOn: { status: "idle" } } : state;
+    case "TRY_ON_RESET":
+      // Reset discards the preview; nothing was persisted (R6.2, R6.3).
+      return tryOn.status === "ready" ? { ...state, tryOn: { status: "idle" } } : state;
+    case "TRY_ON_CLOSED":
+      return tryOn.status === "running"
+        ? state
+        : { step: "reviewed", job: state.job, image: state.image, analysis: state.analysis };
+    default:
+      return state;
   }
 }
 
@@ -127,7 +168,16 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
           return state;
       }
     case "reviewed":
-      return event.type === "START_OVER" ? savedDraft(state.job) : state;
+      switch (event.type) {
+        case "START_OVER":
+          return savedDraft(state.job);
+        case "TRY_ON_OPENED":
+          return { step: "trying-on", job: state.job, image: state.image, analysis: state.analysis, tryOn: { status: "idle" }, attempt: 0 };
+        default:
+          return state;
+      }
+    case "trying-on":
+      return tryOnTransition(state, event);
     case "error":
       return event.type === "RECOVERY_SELECTED" ? recover(state, event.recovery) : state;
   }
