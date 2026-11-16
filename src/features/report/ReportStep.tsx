@@ -32,7 +32,7 @@ export function ReportStep({ result, tryOn, generatedAt, onBack, onStartOver }: 
   return (
     <div className="step-stack">
       <p className="field-hint">Your photo is not included. Saving creates a text file only where you choose.</p>
-      <pre className="report-preview" tabIndex={0} aria-label="Report preview">
+      <pre className="report-preview" role="region" tabIndex={0} aria-label="Report preview">
         {contents}
       </pre>
       <div className="photo-actions">
