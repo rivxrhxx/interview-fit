@@ -70,7 +70,7 @@ export function faceQualityObservations(results: unknown): Observation[] | null 
   const fields = quality as Record<string, unknown>;
 
   if (fields.has_face === false) {
-    return [{ id: "obs_face_presence", category: "framing", text: FRAMING_ERRORS.error_no_face }];
+    return [{ id: "obs_face_presence", category: "framing", assessment: "adjustable", text: FRAMING_ERRORS.error_no_face }];
   }
   if (fields.has_face !== true) return null;
 
@@ -79,7 +79,8 @@ export function faceQualityObservations(results: unknown): Observation[] | null 
     const value = fields[field];
     if (typeof value !== "string") continue;
     const copy = QUALITY_TEXT[field];
-    observations.push({ id: copy.id, category: copy.category, text: value === GOOD ? copy.good : copy.adjust });
+    const ok = value === GOOD;
+    observations.push({ id: copy.id, category: copy.category, assessment: ok ? "ok" : "adjustable", text: ok ? copy.good : copy.adjust });
   }
   return observations.length > 0 ? observations : null;
 }

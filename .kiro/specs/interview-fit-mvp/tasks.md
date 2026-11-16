@@ -49,7 +49,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: secret redaction, provider ID hiding, idempotency
   - Verify: mocked provider tests; optional low-volume live smoke
 
-- [ ] 7.1 Implement policy-constrained recommendations
+- [x] 7.1 Implement policy-constrained recommendations
   - Requirements: R5.1, R5.2, R5.3
   - Tests first: prohibited claims and prompt-injection attempts
   - Verify: recommendation policy suite

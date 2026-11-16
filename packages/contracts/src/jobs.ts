@@ -28,9 +28,14 @@ export interface JobContext {
   cues: JobCue[];
 }
 
+/** Whether an observation is already fine or worth an optional adjustment. Never a score. */
+export const OBSERVATION_ASSESSMENTS = ["ok", "adjustable"] as const;
+export type ObservationAssessment = (typeof OBSERVATION_ASSESSMENTS)[number];
+
 export interface Observation {
   id: string;
   category: ObservationCategory;
+  assessment: ObservationAssessment;
   text: string;
 }
 

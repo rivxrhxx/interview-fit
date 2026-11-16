@@ -9,6 +9,7 @@ export function captureBasics({ width, height }: Pick<ImageInfo, "width" | "heig
     {
       id: "obs_clarity",
       category: "image-clarity",
+      assessment: megapixels >= 0.9 ? "ok" : "adjustable",
       text:
         megapixels >= 0.9
           ? `The photo resolution (${width}×${height}) is enough for a clear video preview.`
@@ -17,6 +18,7 @@ export function captureBasics({ width, height }: Pick<ImageInfo, "width" | "heig
     {
       id: "obs_orientation",
       category: "framing",
+      assessment: orientation === "landscape" ? "ok" : "adjustable",
       text:
         orientation === "landscape"
           ? "The photo is in landscape orientation, like a typical video call frame."

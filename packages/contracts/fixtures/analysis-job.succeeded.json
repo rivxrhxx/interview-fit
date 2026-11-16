@@ -7,15 +7,33 @@
   "result": {
     "generatedAt": "2026-11-16T09:00:12.000Z",
     "jobContext": {
-      "summary": "Client-facing consulting role with video interviews.",
+      "summary": "The job description mentions client-facing work and a video interview.",
       "cues": [
-        { "id": "client-facing", "label": "Client-facing work", "evidence": "present findings to clients" },
-        { "id": "video-interview", "label": "Video interview", "evidence": "interviews are held over video" }
+        {
+          "id": "client-facing",
+          "label": "Client-facing work",
+          "evidence": "present findings to clients"
+        },
+        {
+          "id": "video-interview",
+          "label": "Video interview",
+          "evidence": "interviews are held over video"
+        }
       ]
     },
     "observations": [
-      { "id": "obs_lighting", "category": "lighting", "text": "The light source appears to be behind you." },
-      { "id": "obs_framing", "category": "framing", "text": "Your head and shoulders are centered in the frame." }
+      {
+        "id": "obs_lighting",
+        "category": "lighting",
+        "assessment": "adjustable",
+        "text": "The light source appears to be behind you."
+      },
+      {
+        "id": "obs_framing",
+        "category": "framing",
+        "assessment": "ok",
+        "text": "Your head and shoulders are centered in the frame."
+      }
     ],
     "recommendations": [
       {
@@ -24,7 +42,9 @@
         "observationId": "obs_lighting",
         "adjustment": "Consider facing a window or adding a soft front light for clearer video.",
         "rationale": "The posting says interviews are held over video, where even front lighting helps the other person see you clearly.",
-        "cueIds": ["video-interview"]
+        "cueIds": [
+          "video-interview"
+        ]
       },
       {
         "id": "rec_attire_client",
@@ -32,7 +52,9 @@
         "observationId": null,
         "adjustment": "Consider a structured layer such as a blazer if that feels comfortable for you.",
         "rationale": "The posting mentions presenting findings to clients, a setting where business attire is common.",
-        "cueIds": ["client-facing"]
+        "cueIds": [
+          "client-facing"
+        ]
       }
     ]
   }

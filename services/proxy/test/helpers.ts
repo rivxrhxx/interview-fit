@@ -68,7 +68,7 @@ export function syntheticPng(width: number, height: number): Uint8Array {
 }
 
 export const NEUTRAL_OBSERVATIONS: Observation[] = [
-  { id: "obs_lighting", category: "lighting", text: "The light source appears to be behind you." },
+  { id: "obs_lighting", category: "lighting", assessment: "adjustable", text: "The light source appears to be behind you." },
 ];
 
 export interface ControlledProvider extends AnalysisProvider {

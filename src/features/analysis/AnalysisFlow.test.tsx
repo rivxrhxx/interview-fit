@@ -1,6 +1,6 @@
 // Task 6.2 — analysis step in the desktop flow: R4.1 (typed first-party adapter), R4.3
 // (timeout → retryable neutral error), R4.4 (cancel → stop polling, cleanup), R8.2/R8.3.
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import queuedFixture from "../../../packages/contracts/fixtures/analysis-job.queued.json";
@@ -39,7 +39,10 @@ describe("analysis step", () => {
     expect(request.consentVersion).toBe(CURRENT_CONSENT_VERSION);
     expect(request.jobDescription).toBe("Client-facing consultant. Interviews are held over video.");
     expect(request.image).toBe(await vi.mocked(adapters.image.prepare).mock.results[0].value);
-    expect(screen.getByText("The light source appears to be behind you.")).toBeInTheDocument();
+    const observations = screen.getByRole("region", { name: "What the photo shows" });
+    expect(within(observations).getByText("The light source appears to be behind you.")).toBeInTheDocument();
+    expect(within(observations).getByText("Could be adjusted")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Suggestions" })).toBeInTheDocument();
   });
 
   it("announces upload and processing status (R8.2)", async () => {

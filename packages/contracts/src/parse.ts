@@ -2,6 +2,7 @@ import { ERROR_MESSAGES, ERROR_POLICY, isErrorCode, type ApiError, type ApiError
 import {
   ANALYSIS_JOB_ID_PATTERN,
   JOB_STATES,
+  OBSERVATION_ASSESSMENTS,
   OBSERVATION_CATEGORIES,
   TRY_ON_JOB_ID_PATTERN,
   TRY_ON_STYLES,
@@ -108,6 +109,7 @@ function parseObservation(value: unknown, path: string): Observation {
   return {
     id: localId(source.id, `${path}.id`),
     category: oneOf(source.category, OBSERVATION_CATEGORIES, `${path}.category`),
+    assessment: oneOf(source.assessment, OBSERVATION_ASSESSMENTS, `${path}.assessment`),
     text: string(source.text, `${path}.text`, MAX_TEXT),
   };
 }

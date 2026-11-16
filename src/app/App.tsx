@@ -13,6 +13,7 @@ import {
 } from "../features/analysis";
 import { PhotoPicker, PhotoPreview } from "../features/capture";
 import { ConsentGate } from "../features/consent";
+import { RecommendationList } from "../features/recommendation";
 import { JobDescriptionForm, JobDescriptionSummary } from "../features/job-posting";
 
 export type { AnalysisTiming } from "../features/analysis";
@@ -98,6 +99,7 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
       return (
         <div className="step-stack">
           <AnalysisReview result={state.analysis.result} />
+          <RecommendationList result={state.analysis.result} />
           <div className="photo-actions">
             <button type="button" className="button button-secondary" onClick={() => dispatch({ type: "START_OVER" })}>
               Start over
