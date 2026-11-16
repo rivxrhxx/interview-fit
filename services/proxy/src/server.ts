@@ -1,0 +1,268 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  ANALYSIS_JOB_ID_PATTERN,
+  ANALYSIS_REQUEST_FIELDS,
+  CURRENT_CONSENT_VERSION,
+  ERROR_MESSAGES,
+  ERROR_POLICY,
+  IMAGE_MAX_BYTES,
+  checkJobDescription,
+  type AnalysisJob,
+  type AnalysisJobId,
+  type ErrorCode,
+} from "../../../packages/contracts/src/index.ts";
+import type { ProxyConfig } from "./config.ts";
+import { observationOnlyGuidance, type GuidanceEngine } from "./guidance.ts";
+import { BodyTooLargeError, parseMultipart, readBody } from "./http/body.ts";
+import { newCorrelationId } from "./ids.ts";
+import { inspectImage } from "./imageInspect.ts";
+import { createAnalysisJobs } from "./jobs/analysisJobs.ts";
+import { createJobStore, type AnalysisJobRecord, type JobStore } from "./jobs/store.ts";
+import type { Logger } from "./logger.ts";
+import type { AnalysisProvider } from "./providers/types.ts";
+import { createRateLimiter } from "./rateLimit.ts";
+
+/** Upload limit plus room for the job description and multipart framing. */
+const MAX_BODY_BYTES = IMAGE_MAX_BYTES + 128 * 1024;
+
+export interface ProxyDeps {
+  config: ProxyConfig;
+  provider: AnalysisProvider;
+  logger: Logger;
+  guidance?: GuidanceEngine;
+  now?: () => number;
+}
+
+export interface Proxy {
+  server: Server;
+  store: JobStore;
+  shutdown(): void;
+}
+
+class HttpError extends Error {
+  readonly code: ErrorCode;
+  readonly status: number;
+  readonly headers: Record<string, string>;
+
+  constructor(code: ErrorCode, options: { status?: number; headers?: Record<string, string> } = {}) {
+    super(code);
+    this.code = code;
+    this.status = options.status ?? ERROR_POLICY[code].httpStatus;
+    this.headers = options.headers ?? {};
+  }
+}
+
+const ROUTES = {
+  collection: "/v1/analysis-jobs",
+  item: /^\/v1\/analysis-jobs\/([^/]+)$/,
+};
+
+function iso(ms: number) {
+  return new Date(ms).toISOString();
+}
+
+/** Builds the public contract view from explicit fields only; internal state never leaks. */
+function toPublicJob(record: AnalysisJobRecord): AnalysisJob {
+  return {
+    id: record.id,
+    state: record.state,
+    createdAt: iso(record.createdAt),
+    expiresAt: iso(record.expiresAt),
+    result: record.state === "succeeded" ? record.result : null,
+    error:
+      record.state === "failed" && record.error
+        ? {
+            code: record.error,
+            message: ERROR_MESSAGES[record.error],
+            retryable: ERROR_POLICY[record.error].retryable,
+            correlationId: record.correlationId,
+          }
+        : null,
+  };
+}
+
+export function createProxy(deps: ProxyDeps): Proxy {
+  const { config, logger } = deps;
+  const now = deps.now ?? Date.now;
+  const store = createJobStore(now);
+  const jobs = createAnalysisJobs({
+    store,
+    provider: deps.provider,
+    guidance: deps.guidance ?? observationOnlyGuidance,
+    logger,
+    now,
+    jobTtlMs: config.jobTtlMs,
+    terminalRetentionMs: config.terminalRetentionMs,
+    providerTimeoutMs: config.providerTimeoutMs,
+  });
+  const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
+  const allowedOrigins = new Set(config.allowedOrigins);
+
+  function send(response: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
+    const payload = JSON.stringify(body);
+    response.writeHead(status, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": Buffer.byteLength(payload),
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      ...headers,
+    });
+    response.end(payload);
+  }
+
+  function sendError(response: ServerResponse, error: HttpError, corsHeaders: Record<string, string>) {
+    send(
+      response,
+      error.status,
+      {
+        error: {
+          code: error.code,
+          message: ERROR_MESSAGES[error.code],
+          retryable: ERROR_POLICY[error.code].retryable,
+          correlationId: newCorrelationId(),
+        },
+      },
+      { ...corsHeaders, ...error.headers },
+    );
+  }
+
+  function lookup(rawId: string): AnalysisJobRecord {
+    if (!ANALYSIS_JOB_ID_PATTERN.test(rawId)) throw new HttpError("JOB_NOT_FOUND");
+    const record = store.get(rawId);
+    if (!record) throw new HttpError("JOB_NOT_FOUND");
+    return record;
+  }
+
+  async function createJob(request: IncomingMessage): Promise<AnalysisJobRecord> {
+    const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
+    if (!decision.allowed) {
+      request.resume();
+      throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
+    }
+
+    const contentType = request.headers["content-type"] ?? "";
+    if (!contentType.startsWith("multipart/form-data")) {
+      request.resume();
+      throw new HttpError("IMAGE_INVALID");
+    }
+
+    let form: FormData;
+    try {
+      form = await parseMultipart(await readBody(request, MAX_BODY_BYTES), contentType);
+    } catch (error) {
+      throw new HttpError(error instanceof BodyTooLargeError ? "IMAGE_TOO_LARGE" : "IMAGE_INVALID");
+    }
+
+    if (form.get(ANALYSIS_REQUEST_FIELDS.consentVersion) !== CURRENT_CONSENT_VERSION) {
+      throw new HttpError("CONSENT_REQUIRED");
+    }
+
+    const rawJob = form.get(ANALYSIS_REQUEST_FIELDS.jobDescription);
+    const job = typeof rawJob === "string" ? checkJobDescription(rawJob) : null;
+    if (!job?.ok) throw new HttpError("JOB_DESCRIPTION_INVALID");
+
+    const file = form.get(ANALYSIS_REQUEST_FIELDS.image);
+    if (!(file instanceof Blob)) throw new HttpError("IMAGE_INVALID");
+    if (file.size > IMAGE_MAX_BYTES) throw new HttpError("IMAGE_TOO_LARGE");
+    const image = new Uint8Array(await file.arrayBuffer());
+    const inspection = inspectImage(image);
+    if (!inspection.ok) throw new HttpError(inspection.code);
+
+    return jobs.create({ jobDescription: job.text, image, imageInfo: inspection.info });
+  }
+
+  async function route(request: IncomingMessage, response: ServerResponse, cors: Record<string, string>) {
+    const path = new URL(request.url ?? "/", "http://proxy.local").pathname;
+    const method = request.method ?? "GET";
+
+    if (path === ROUTES.collection) {
+      if (method !== "POST") {
+        request.resume();
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, OPTIONS" } });
+      }
+      const record = await createJob(request);
+      send(response, 202, toPublicJob(record), cors);
+      return "/v1/analysis-jobs";
+    }
+
+    const item = ROUTES.item.exec(path);
+    if (item) {
+      request.resume();
+      const id = item[1];
+      if (method === "GET") {
+        send(response, 200, toPublicJob(lookup(id)), cors);
+      } else if (method === "DELETE") {
+        const record = jobs.cancel(lookup(id).id as AnalysisJobId);
+        if (!record) throw new HttpError("JOB_NOT_FOUND");
+        send(response, 200, toPublicJob(record), cors);
+      } else {
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, DELETE, OPTIONS" } });
+      }
+      return "/v1/analysis-jobs/:id";
+    }
+
+    request.resume();
+    throw new HttpError("JOB_NOT_FOUND");
+  }
+
+  const server = createServer(async (request, response) => {
+    const started = now();
+    const origin = request.headers.origin;
+    const originAllowed = origin !== undefined && allowedOrigins.has(origin);
+    const cors: Record<string, string> = originAllowed ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {};
+    let routeLabel = "unmatched";
+
+    try {
+      if (origin !== undefined && !originAllowed) {
+        request.resume();
+        throw new HttpError("JOB_NOT_FOUND", { status: 403 });
+      }
+      if (request.method === "OPTIONS") {
+        request.resume();
+        response.writeHead(204, {
+          ...cors,
+          "Access-Control-Allow-Methods": "GET, POST, DELETE",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "600",
+        });
+        response.end();
+        routeLabel = "preflight";
+      } else {
+        routeLabel = await route(request, response, cors);
+      }
+    } catch (error) {
+      const httpError = error instanceof HttpError ? error : new HttpError("INTERNAL_ERROR");
+      if (!(error instanceof HttpError)) {
+        logger.log({ level: "error", event: "unhandled_error", errorName: error instanceof Error ? error.name : "unknown" });
+      }
+      if (!response.headersSent) sendError(response, httpError, cors);
+    } finally {
+      logger.log({
+        level: "info",
+        event: "http_request",
+        method: request.method ?? "UNKNOWN",
+        route: routeLabel,
+        status: response.statusCode,
+        durationMs: now() - started,
+      });
+    }
+  });
+
+  const sweeper =
+    config.sweepIntervalMs > 0
+      ? setInterval(() => {
+          store.sweep();
+          limiter.prune();
+        }, config.sweepIntervalMs)
+      : undefined;
+  sweeper?.unref();
+
+  return {
+    server,
+    store,
+    shutdown() {
+      if (sweeper) clearInterval(sweeper);
+      store.clear();
+    },
+  };
+}

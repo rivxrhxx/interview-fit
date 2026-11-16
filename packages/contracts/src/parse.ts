@@ -124,6 +124,15 @@ function parseRecommendation(value: unknown, path: string): Recommendation {
   };
 }
 
+/** Validates a provider-normalized observation list; IDs must be unique. */
+export function parseObservations(value: unknown, path = "$.observations"): Observation[] {
+  const observations = list(value, path, parseObservation);
+  if (new Set(observations.map((observation) => observation.id)).size !== observations.length) {
+    throw new ContractError(path, "duplicate observation id");
+  }
+  return observations;
+}
+
 export function parseAnalysisResult(value: unknown, path = "$.result"): AnalysisResult {
   const source = record(value, path);
   const context = record(source.jobContext, `${path}.jobContext`);
