@@ -13,20 +13,20 @@ npm run tauri dev                        # terminal 2
 
 Sample job description:
 
-> Senior consultant at a financial advisory firm. You will present findings to clients weekly. Interviews are held over video (Zoom).
+> Senior consultant at a financial advisory firm. You will present findings to clients weekly. Dress code: business casual. Interviews are held over video (Zoom).
 
 ## Script
 
 | Time | Action | Narration |
 |---|---|---|
-| 0:00–0:20 | Show the first screen. | "Interview Fit helps candidates prepare their on-camera presentation for a specific job, without judging how they look. It is a Tauri desktop app with a Rust security boundary, a React UI, and a first-party backend in front of YouCam." |
-| 0:20–0:40 | Paste the job description and save it. Point at the character counter. | "The posting is treated as untrusted text. It is only ever scanned for presentation-relevant cues and never interpreted as instructions." |
-| 0:40–1:05 | Choose `demo-assets/synthetic-portrait.png` and show the preview. | "The Rust command validates the file by its signature, rotates it upright, and re-encodes it, which removes GPS and camera metadata. Nothing has left the device yet." |
-| 1:05–1:25 | Open consent. Show that the box starts unchecked, then check it and agree. | "Consent names what is sent, why, and who receives it, including YouCam. Declining uploads zero bytes." |
-| 1:25–1:55 | The analysis runs and the guidance appears. | "The backend re-validates everything and returns neutral observations only: lighting, framing, clarity. Each suggestion is split into what we noticed, an optional adjustment, and why, and quotes the cue from the posting, such as 'over video' or 'financial'." |
-| 1:55–2:25 | Open the try-on, generate the preview, compare, then reset. | "There is exactly one curated style. The original and the preview sit side by side; reset deletes the preview here and on the backend. Nothing is saved implicitly." |
-| 2:25–2:45 | Create the report and save it. | "The report is text only. It never embeds the photo, and the file is written only where the user chooses in the native dialog." |
-| 2:45–3:00 | Close on the `.kiro/` folder and the verification report. | "Kiro specs, steering, and hooks drove every task. Each requirement maps to tests in `.kiro/reports/verification.md`." |
+| 0:00–0:15 | Show the first screen and the 한국어 / EN switch. | "Interview Fit helps candidates prepare how they present themselves for a specific job, without judging how they look. Tauri and Rust on the device, a React UI, and a first-party backend in front of YouCam and Claude." |
+| 0:15–0:45 | Paste the posting, point at the notice under the field, and analyze it. | "Only the posting text is sent here, and the app says so first. The analysis covers role, industry, atmosphere, interview format, and dress code, and every point quotes the posting or says it is not stated. Claude writes it; if Claude is unavailable, a rules engine answers and the badge says so." |
+| 0:45–1:05 | Choose `demo-assets/synthetic-portrait.png` and show the preview. | "The Rust command validates the file by its signature, rotates it upright, scales it to 1024 pixels, and re-encodes it, which removes GPS and camera metadata. Nothing has left the device yet." |
+| 1:05–1:20 | Open consent. Show that the box starts unchecked, then agree. | "Consent names what is sent and to whom: the photo to YouCam, and only text to Claude. Declining uploads zero bytes." |
+| 1:20–1:55 | The analysis runs and the guidance appears. | "YouCam checks photo quality and runs a skin analysis, but scores never leave the backend: they become optional prep tips such as blotting shine before a video call. Each suggestion says what we noticed, an optional adjustment, and why, citing the posting." |
+| 1:55–2:30 | Open the hairstyle try-on. Show the marked styles, preview one, compare, then try another. | "Six curated styles; the ones that suit a business-casual posting are marked, and the user chooses. YouCam keeps the user's own hair color. The preview is compared side by side and never saved implicitly." |
+| 2:30–2:45 | Create the report and save it. | "The report is text only: the job analysis, observations, suggestions, and which style was previewed. It never embeds the photo." |
+| 2:45–3:00 | Close on the `.kiro/` folder and the verification report. | "Kiro specs and steering drove every task, including this scope change. Each requirement maps to tests in `.kiro/reports/verification.md`." |
 
 ## Optional failure-path clip
 

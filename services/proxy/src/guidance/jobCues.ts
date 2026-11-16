@@ -77,7 +77,11 @@ export const CUE_CATALOG: readonly CueEntry[] = [
     id: "casual-workplace",
     label: { en: "Casual workplace", ko: "캐주얼한 근무 환경" },
     phrase: { en: "a casual workplace", ko: "캐주얼한 근무 환경" },
-    patterns: [/\b(start-?ups?|early-stage|casual|relaxed dress)\b/i, /(스타트업|자율\s*복장|캐주얼|편한\s*복장)/],
+    // "Business casual" and "smart casual" are dress codes, not a casual workplace.
+    patterns: [
+      /\b(start-?ups?|early-stage|(?<!(?:business|smart)[- ])casual|relaxed dress)\b/i,
+      /(스타트업|자율\s*복장|(?<!(?:비즈니스|스마트)\s*)캐주얼|편한\s*복장)/,
+    ],
   },
   {
     id: "in-person",
