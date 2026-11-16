@@ -181,6 +181,35 @@ describe("DELETE /v1/analysis-jobs/:id", () => {
     expect((await getJob(created.id)).state).toBe("cancelled");
   });
 
+  it("deletes the result of a finished analysis too, so it cannot be read again (R4.7)", async () => {
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { terminalRetentionMs: 60_000 });
+    const created = parseAnalysisJob(await (await postAnalysis(proxy)).json());
+    expect((await untilTerminal(created.id)).result).not.toBeNull();
+
+    const response = await fetch(`${proxy.baseUrl}/v1/analysis-jobs/${created.id}`, { method: "DELETE" });
+    const deleted = parseAnalysisJob(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(deleted).toMatchObject({ state: "cancelled", result: null });
+    expect(await getJob(created.id)).toMatchObject({ state: "cancelled", result: null });
+    expect(proxy.store.peek(created.id)).toMatchObject({ result: null, image: null, imageInfo: null, jobDescription: null });
+
+    // The emptied record itself goes away after the short terminal retention window.
+    proxy.clock.now += 60_001;
+    expect((await fetch(`${proxy.baseUrl}/v1/analysis-jobs/${created.id}`)).status).toBe(404);
+  });
+
+  it("keeps a failed job's error but no image after DELETE", async () => {
+    proxy = await startProxy(providerReturning(async () => [{ id: "bad", category: "nope" }] as never));
+    const created = parseAnalysisJob(await (await postAnalysis(proxy)).json());
+    await untilTerminal(created.id);
+
+    const deleted = parseAnalysisJob(await (await fetch(`${proxy.baseUrl}/v1/analysis-jobs/${created.id}`, { method: "DELETE" })).json());
+
+    expect(deleted).toMatchObject({ state: "failed", result: null });
+    expect(proxy.store.peek(created.id)?.image).toBeNull();
+  });
+
   it("returns JOB_NOT_FOUND for unknown or malformed IDs", async () => {
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS));
 
