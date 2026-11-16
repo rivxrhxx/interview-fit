@@ -44,7 +44,11 @@ export function toErrorCode(error: unknown): ErrorCode {
   return "INTERNAL_ERROR";
 }
 
-/** Races the provider against a hard deadline so a stalled provider cannot hold a job open (R4.3). */
+/**
+ * Races the work against a hard deadline so a stalled provider cannot hold a job
+ * open (R4.3). Any failure also aborts the controller, so parallel sibling work
+ * (for example the other provider task) stops instead of running on unobserved.
+ */
 export function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, controller: AbortController, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
@@ -54,8 +58,16 @@ export function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, contr
       reject(timeout);
     }, ms);
   });
-  return Promise.race([work(controller.signal), deadline]).finally(() => clearTimeout(timer));
+  return Promise.race([work(controller.signal), deadline])
+    .catch((error: unknown) => {
+      if (!controller.signal.aborted) controller.abort(error);
+      throw error;
+    })
+    .finally(() => clearTimeout(timer));
 }
+
+/** Time kept back from the deadline so the rules can still answer after an AI timeout. */
+const RULES_MARGIN_MS = 1_500;
 
 export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
   const { store, provider, advisor, logger, now } = options;
@@ -91,6 +103,7 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
       if (!image || !imageInfo) throw new ProviderError("invalid-image");
       const jobDescription = record.jobDescription ?? "";
       const locale = record.locale;
+      const deadlineAt = now() + options.providerTimeoutMs;
       const result = await withDeadline(
         async (signal) => {
           // The job analysis is usually cached from the job step, so this adds no second AI call.
@@ -104,7 +117,9 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
           if (observations.length < parsed.length) {
             logger.log({ level: "warn", event: "policy_blocked_observations", count: parsed.length - observations.length });
           }
-          const recommendations = await advisor.suggest({ jobDescription, jobContext, observations, locale }, signal);
+          // The AI gets only the time left before the deadline; then the rules answer (R1.6).
+          const budgetMs = deadlineAt - now() - RULES_MARGIN_MS;
+          const recommendations = await advisor.suggest({ jobDescription, jobContext, observations, locale }, signal, budgetMs);
           return { jobContext, observations, recommendations };
         },
         controller,

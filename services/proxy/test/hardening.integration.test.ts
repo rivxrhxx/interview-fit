@@ -4,6 +4,7 @@
 // bounded provider downloads.
 import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { withDeadline } from "../src/jobs/analysisJobs.ts";
 import { parseAnalysisJob, parseApiErrorBody, parseTryOnJob } from "../../../packages/contracts/src/index.ts";
 import { loadConfig } from "../src/config.ts";
 import { stripImageMetadata } from "../src/imageInspect.ts";
@@ -192,5 +193,24 @@ describe("configuration guards (review finding 7)", () => {
   it("does not allow the expiry sweeper to be disabled", () => {
     expect(() => loadConfig({ SWEEP_INTERVAL_MS: "0" })).toThrow();
     expect(loadConfig({}).sweepIntervalMs).toBeGreaterThanOrEqual(1_000);
+  });
+});
+
+describe("sibling work stops on failure (review finding 3)", () => {
+  it("aborts the shared controller when the work fails, so parallel tasks stop", async () => {
+    const controller = new AbortController();
+    let sibling: AbortSignal | undefined;
+
+    const failing = withDeadline(
+      async (signal) => {
+        sibling = signal;
+        throw new Error("advisor failed");
+      },
+      controller,
+      1_000,
+    );
+
+    await expect(failing).rejects.toThrow("advisor failed");
+    expect(sibling?.aborted).toBe(true);
   });
 });

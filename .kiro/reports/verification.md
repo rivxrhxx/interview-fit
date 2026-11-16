@@ -43,3 +43,38 @@ A separate read-only reviewer applied `.kiro/prompts/privacy-review.md` to all w
 | 8 | `save_report` could overwrite a path the dialog never confirmed | `create_new` when `.md` had to be appended | Rust `report_export` tests |
 
 The consent text now states the 15-minute backend retention, and the consent version moved to `2026-11-16.v2`. After the fixes, `npm run verify:fast` (344 tests), `npm run build`, `npm run verify:rust` (19 tests), and every named suite exited 0. Removing `core:default` still needs a manual check in the packaged app: `invoke` of the two app commands should still be allowed.
+
+## Scope update (2026-11-16): job analysis, skin prep, Claude suggestions, hairstyle try-on
+
+Tasks 12.1–12.6 (see `tasks.md`) were implemented one branch each, tests first.
+
+| Task | Requirements | Evidence |
+|---|---|---|
+| 12.1 Spec and steering update | R1.4–R6.4 | `npm run verify:harness` |
+| 12.2 Job and company-atmosphere analysis | R1.3, R1.4, R1.5 | `services/proxy/test/job-analysis.test.ts`, `src/features/job-posting/JobInsight.test.tsx`, `src/lib/api/client.test.ts` |
+| 12.3 Claude adapter with rules fallback | R1.6, R5.3, R5.6 | `services/proxy/test/claude-writer.test.ts` (SDK against a fake API, no network) |
+| 12.4 Skin-prep tips and 1024 px photos | R3.3, R3.4, R5.4, R5.5 | `services/proxy/test/skin-prep.test.ts`, `capture-basics.test.ts`, Rust `image_prep` tests, `src/lib/tauri/image.test.ts`, consent tests (version `2026-11-16.v3`) |
+| 12.5 Curated hairstyle try-on | R6.1–R6.4 | `services/proxy/test/youcam-try-on.test.ts`, `try-on.integration.test.ts`, `src/features/try-on/TryOnFlow.test.tsx` |
+| 12.6 Report and docs | R7.1, R7.2 | `src/features/report/buildReport.privacy.test.ts`; Chrome screenshots of the full Korean (light) and English (dark) flow against the simulator, with no console errors |
+
+A live smoke test with a faceless synthetic image against the real YouCam API confirmed that the `skin-analysis`, `hair-transfer` (v2.1, `template_id`, `hair_color: "src"`), and template-list request formats are accepted (HTTP 200 on task creation; the tasks then reported no face, which YouCam does not charge for). A real style thumbnail was downloaded and stripped. The success shape of `skin-analysis` with a real face has not been checked live yet.
+
+Reviewing the screenshots found two defects, both fixed with tests: every 1024 px photo was flagged as below HD resolution, and "business casual" was read as a casual workplace.
+
+### Independent review of the new backend code
+
+A separate read-only reviewer reported 3 high, 3 medium, and 3 low findings, two of them reproduced with local probes. All nine were fixed with regression tests:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | AI job-analysis text (summary, values, formality) could carry injected text | The model chooses catalog IDs with verbatim quotes and a verbatim title only, fills only fields the rules left empty, quotes need two letters and no links or contact details, the summary is always rebuilt, formality is derived deterministically |
+| 2 | A slow AI failed the request instead of falling back | Per-call AI budgets via `AbortSignal.timeout` / `AbortSignal.any`, no SDK retries, suggestions limited to the time left before the photo deadline; only the caller's own cancellation stops a request |
+| 3 | The shared analysis cache was tied to the first caller's signal; a failed job left sibling provider work running | Shared work runs independently and every caller races it against its own signal; `withDeadline` aborts the controller on any failure |
+| 4 | A slow skin task failed the whole analysis | 10-second grace after photo quality, then the skin task is stopped and skipped |
+| 5 | AI skin-prep or hair wording could slip past the deny-list | Skin-prep and hair wording always comes from reviewed templates, prep tips must answer an adjustable skin-prep observation, and the deny-list gained skin-condition and gendered terms in English and Korean |
+| 6 | The thumbnail URL list was cached forever; the thumbnail route had no rate limit | 30-minute list TTL, re-list after any failed download, separate thumbnail rate limit |
+| 7 | Cache bookkeeping could evict or delete the wrong entry | In-flight entries are never evicted; deletion checks entry identity |
+| 8 | Text analyses used up the upload rate limit, even on cache hits | Separate bucket; cached analyses are free |
+| 9 | The photo step could show a different analysis than the job step | The analysis cache now lasts at least an hour. A language switch between the two steps still produces a fresh analysis in the new language |
+
+After the fixes, `npm run verify` exited 0: 503 tests, the production web build, and 22 Rust tests. Task 12.6 stays open until a manual golden path with a real, permissioned face photo runs against the live backend.

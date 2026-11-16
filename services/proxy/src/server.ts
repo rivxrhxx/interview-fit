@@ -130,7 +130,8 @@ export function createProxy(deps: ProxyDeps): Proxy {
   // Deleting or expiring an analysis job also deletes try-on results made from it.
   let tryOnCascade: ((analysisJobId: string) => void) | undefined;
   const store = createJobStore(now, { onRemove: (id) => tryOnCascade?.(id) });
-  const advisor = createAdvisor({ ai: deps.ai ?? null, logger, now, cacheTtlMs: config.jobTtlMs });
+  // Analyses hold no image, so they outlive the photo job; the photo step then reuses what the user saw.
+  const advisor = createAdvisor({ ai: deps.ai ?? null, logger, now, cacheTtlMs: Math.max(config.jobTtlMs, 60 * 60_000) });
   const jobs = createAnalysisJobs({
     store,
     provider: deps.provider,
@@ -153,6 +154,9 @@ export function createProxy(deps: ProxyDeps): Proxy {
     : null;
   tryOnCascade = (id) => tryOns?.removeForAnalysis(id);
   const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
+  // Text-only analyses and catalog thumbnails get their own buckets so they never use up uploads.
+  const analysisLimiter = createRateLimiter({ limit: config.rateLimitPerMinute * 3, windowMs: 60_000, now });
+  const thumbnailLimiter = createRateLimiter({ limit: 120, windowMs: 60_000, now });
   const idempotency = new Map<string, string>();
   /** Keys cancelled before their upload finished; the job is cancelled as soon as it exists. */
   const tombstones = new Map<string, number>();
@@ -268,11 +272,6 @@ export function createProxy(deps: ProxyDeps): Proxy {
 
   /** Job and company-atmosphere analysis from text only; no image, no consent needed (R1.4, R1.5). */
   async function analyzeJob(request: IncomingMessage, response: ServerResponse): Promise<JobAnalysis> {
-    const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
-    if (!decision.allowed) {
-      request.resume();
-      throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
-    }
     if (!(request.headers["content-type"] ?? "").startsWith("application/json")) {
       request.resume();
       throw new HttpError("REQUEST_INVALID");
@@ -289,6 +288,14 @@ export function createProxy(deps: ProxyDeps): Proxy {
     if (!job?.ok) throw new HttpError("JOB_DESCRIPTION_INVALID");
     const requestedLocale = fields[JOB_ANALYSIS_REQUEST_FIELDS.locale];
     const locale = isLocale(requestedLocale) ? requestedLocale : "en";
+
+    // Only new work counts against the limit; a cached analysis costs nothing.
+    if (!advisor.hasCached(job.text, locale)) {
+      const decision = analysisLimiter.take(request.socket.remoteAddress ?? "unknown");
+      if (!decision.allowed) {
+        throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
+      }
+    }
 
     // Stop AI work when the desktop goes away (for example, the user edits the posting).
     const controller = new AbortController();
@@ -448,6 +455,8 @@ export function createProxy(deps: ProxyDeps): Proxy {
       // Only curated styles; anything else never reaches the provider.
       if (!TRY_ON_STYLE_IDS.includes(styleId)) throw new HttpError("JOB_NOT_FOUND");
       if (!deps.tryOnProvider) throw new HttpError("PROCESSING_UNAVAILABLE");
+      const decision = thumbnailLimiter.take(request.socket.remoteAddress ?? "unknown");
+      if (!decision.allowed) throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
       let thumbnail: { bytes: Uint8Array; mimeType: string };
       try {
         thumbnail = await withDeadline(
@@ -535,6 +544,8 @@ export function createProxy(deps: ProxyDeps): Proxy {
           store.sweep();
           tryOns?.sweep();
           limiter.prune();
+          analysisLimiter.prune();
+          thumbnailLimiter.prune();
           for (const [key, id] of idempotency) if (!store.peek(id)) idempotency.delete(key);
           for (const [key, expiresAt] of tombstones) if (expiresAt <= now()) tombstones.delete(key);
         }, config.sweepIntervalMs)

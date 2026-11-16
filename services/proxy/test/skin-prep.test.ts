@@ -14,11 +14,11 @@ import { memoryLogger, syntheticJpeg } from "./helpers.ts";
 
 const image = { bytes: syntheticJpeg(1024, 768), mimeType: "image/jpeg" as const, width: 1024, height: 768 };
 
-function setup(options: FakeYouCamOptions = {}) {
+function setup(options: FakeYouCamOptions = {}, skinGraceMs?: number) {
   const youcam = fakeYouCam(options);
   const logger = memoryLogger();
   const config = loadYouCamConfig({ YOUCAM_API_KEY: FAKE_API_KEY, YOUCAM_API_BASE_URL: FAKE_BASE_URL, YOUCAM_POLL_INTERVAL_MS: "1" });
-  return { youcam, logger, provider: createYouCamAnalysisProvider({ config, fetch: youcam.fetch, logger }) };
+  return { youcam, logger, provider: createYouCamAnalysisProvider({ config, fetch: youcam.fetch, logger, skinGraceMs }) };
 }
 
 const prepOf = (observations: Awaited<ReturnType<ReturnType<typeof setup>["provider"]["analyze"]>>) =>
@@ -102,6 +102,21 @@ describe("skin prep never blocks the analysis (R5.5)", () => {
     expect(logger.entries).toContainEqual(expect.objectContaining({ event: "skin_prep_skipped" }));
   });
 
+  it("does not wait for a slow skin task once photo quality is in (review finding 4)", async () => {
+    const { provider, logger, youcam } = setup({ skinPollReplies: [{ status: 200, data: { task_status: "running" } } as never] }, 30);
+
+    const observations = await provider.analyze(image, new AbortController().signal);
+
+    expect(observations.some((observation) => observation.id === "obs_lighting")).toBe(true);
+    expect(observations.some((observation) => observation.category === "skin-prep")).toBe(false);
+    expect(logger.entries).toContainEqual(expect.objectContaining({ event: "skin_prep_skipped", reason: "slow" }));
+    // The skin task stops polling after it is skipped.
+    const polls = () => youcam.requests.filter((request) => request.url.includes("/task/skin-analysis/")).length;
+    const before = polls();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(polls()).toBeLessThanOrEqual(before + 1);
+  });
+
   it("still fails when the required photo-quality task fails", async () => {
     const { provider } = setup({ createReply: { status: 502, body: {} } });
 
@@ -120,6 +135,19 @@ describe("skin prep never blocks the analysis (R5.5)", () => {
 });
 
 describe("prep suggestions", () => {
+  it("only answers skin-prep observations marked adjustable, whoever wrote the tip", () => {
+    const observations = [
+      ...skinPrepObservations({ output: [{ type: "oiliness", raw_score: 90 }] }, "en")!,
+    ];
+    const jobContext = analyzeJobRules("Interviews are held over video.", "en");
+    const written = [
+      { id: "rec_x", category: "skin-prep" as const, observationId: "obs_prep_oiliness", adjustment: "Consider blotting paper.", rationale: "Video.", cueIds: ["video-interview"] },
+      { id: "rec_y", category: "skin-prep" as const, observationId: null, adjustment: "Consider blotting paper.", rationale: "Video.", cueIds: ["video-interview"] },
+    ];
+
+    expect(filterRecommendations(written, jobContext, observations)).toEqual([]);
+  });
+
   it.each(["en", "ko"] as Locale[])("gives one optional, policy-compliant tip per adjustable concern (%s)", (locale) => {
     const observations = SKIN_CONCERNS.flatMap((concern) => skinPrepObservations({ output: [{ type: concern, raw_score: 30 }] }, locale)!);
     const jobContext = analyzeJobRules(locale === "ko" ? "1차 면접은 화상 면접으로 진행됩니다." : "Interviews are held over video.", locale);

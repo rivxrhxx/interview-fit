@@ -317,6 +317,9 @@ export function filterRecommendations(
 ): Recommendation[] {
   const citable = citableJobIds(context);
   const observationIds = new Set(observations.map((observation) => observation.id));
+  const adjustablePrep = new Set(
+    observations.filter((observation) => observation.category === "skin-prep" && observation.assessment === "adjustable").map((o) => o.id),
+  );
   const seen = new Set<string>();
 
   return raw
@@ -326,7 +329,9 @@ export function filterRecommendations(
       seen.add(rec.id);
       const cited = rec.cueIds.length > 0 || (rec.observationId !== null && observationIds.has(rec.observationId));
       const knownObservation = rec.observationId === null || observationIds.has(rec.observationId);
-      return cited && knownObservation && passesContentPolicy(rec.adjustment) && passesContentPolicy(rec.rationale);
+      // A prep tip only ever answers a skin-prep observation that was marked adjustable (R5.4).
+      const prepAnswered = rec.category !== "skin-prep" || (rec.observationId !== null && adjustablePrep.has(rec.observationId));
+      return cited && knownObservation && prepAnswered && passesContentPolicy(rec.adjustment) && passesContentPolicy(rec.rationale);
     })
     .slice(0, MAX_RECOMMENDATIONS);
 }

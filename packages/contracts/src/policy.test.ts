@@ -41,4 +41,22 @@ describe("content policy", () => {
   ])("allows neutral guidance: %s", (text) => {
     expect(findPolicyViolation(text)).toBeNull();
   });
+
+  // Review finding 5: grooming and gendered wording an AI writer could produce.
+  it.each([
+    ["medical", "Consider hiding redness and dark spots."],
+    ["medical", "Cover pimples or breakouts before the call."],
+    ["medical", "Blackheads and scars may show on camera."],
+    ["medical", "홍조나 트러블을 컨실러로 가려 보세요."],
+    ["medical", "각질이 보일 수 있어요."],
+    ["protected-trait", "A feminine updo, a popular choice for ladies."],
+    ["protected-trait", "A masculine look; gentlemen often choose it."],
+    ["protected-trait", "숙녀다운 스타일을 고려해 보세요."],
+  ] as const)("flags %s wording: %s", (category, text) => {
+    expect(findPolicyViolation(text)).toBe(category);
+  });
+
+  it("does not flag troubleshooting in a posting", () => {
+    expect(passesContentPolicy("서버 트러블슈팅 경험")).toBe(true);
+  });
 });

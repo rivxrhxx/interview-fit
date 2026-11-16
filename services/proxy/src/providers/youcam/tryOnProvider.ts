@@ -38,6 +38,8 @@ const UNSUITABLE_ERRORS = new Set([
 
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_TEMPLATE_PAGES = 10;
+/** Template thumbnail URLs may be signed and expire, so the list is refreshed periodically. */
+const TEMPLATE_LIST_TTL_MS = 30 * 60_000;
 
 /** Downloads a provider image, validates it, and strips metadata; the URL never leaves the backend (R4.2). */
 async function fetchClean(client: YouCamClient, url: string, maxBytes: number, signal: AbortSignal): Promise<TryOnResult> {
@@ -51,9 +53,15 @@ async function fetchClean(client: YouCamClient, url: string, maxBytes: number, s
 }
 
 /** YouCam AI Hairstyle (hair-transfer v2.1) adapter with backend-proxied style thumbnails. */
-export function createYouCamTryOnProvider(options: { config: YouCamConfig; logger: Logger; fetch?: typeof fetch }): TryOnProvider {
+export function createYouCamTryOnProvider(options: {
+  config: YouCamConfig;
+  logger: Logger;
+  fetch?: typeof fetch;
+  now?: () => number;
+}): TryOnProvider {
   const client = createYouCamClient(options);
-  let thumbUrls: Promise<Map<string, string>> | null = null;
+  const now = options.now ?? Date.now;
+  let thumbUrls: { expiresAt: number; value: Promise<Map<string, string>> } | null = null;
   const thumbnails = new Map<TryOnStyleId, Promise<TryOnResult>>();
 
   /** Finds the thumbnail URLs of the curated templates in the provider's template list. */
@@ -90,20 +98,22 @@ export function createYouCamTryOnProvider(options: { config: YouCamConfig; logge
       const cached = thumbnails.get(style);
       if (cached) return cached;
       const work = (async () => {
-        thumbUrls ??= loadThumbUrls(signal);
-        let urls: Map<string, string>;
+        if (!thumbUrls || thumbUrls.expiresAt <= now()) {
+          thumbUrls = { expiresAt: now() + TEMPLATE_LIST_TTL_MS, value: loadThumbUrls(signal) };
+        }
+        const list = thumbUrls;
         try {
-          urls = await thumbUrls;
+          const url = (await list.value).get(STYLE_TEMPLATES[style]);
+          if (!url) {
+            options.logger.log({ level: "warn", event: "style_thumbnail_missing" });
+            throw new ProviderError("unavailable");
+          }
+          return await fetchClean(client, url, THUMBNAIL_MAX_BYTES, signal);
         } catch (error) {
-          thumbUrls = null;
+          // A failed listing, a missing template, or a stale URL: list again next time.
+          if (thumbUrls === list) thumbUrls = null;
           throw error;
         }
-        const url = urls.get(STYLE_TEMPLATES[style]);
-        if (!url) {
-          options.logger.log({ level: "warn", event: "style_thumbnail_missing" });
-          throw new ProviderError("unavailable");
-        }
-        return fetchClean(client, url, THUMBNAIL_MAX_BYTES, signal);
       })();
       thumbnails.set(style, work);
       // A failed download is retried on the next request instead of being cached.

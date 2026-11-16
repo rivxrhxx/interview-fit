@@ -136,6 +136,23 @@ describe("style thumbnails", () => {
     expect(youcam.requests.filter((request) => request.url.startsWith(FAKE_THUMB_BASE))).toHaveLength(2);
   });
 
+  it("lists templates again after a failed thumbnail download, so a stale URL does not stick (review finding 6)", async () => {
+    let served = 0;
+    const youcam = fakeYouCam({ templatePages: pages, thumbBytes: resultWithExif() });
+    const flaky: typeof fetch = async (input, init) => {
+      if (String(input).startsWith(FAKE_THUMB_BASE) && served++ === 0) return new Response(null, { status: 403 });
+      return youcam.fetch(input, init);
+    };
+    const config = loadYouCamConfig({ YOUCAM_API_KEY: FAKE_API_KEY, YOUCAM_API_BASE_URL: FAKE_BASE_URL, YOUCAM_POLL_INTERVAL_MS: "1" });
+    const provider = createYouCamTryOnProvider({ config, fetch: flaky, logger: memoryLogger() });
+    const signal = new AbortController().signal;
+
+    await expect(provider.thumbnail("neat-updo", signal)).rejects.toMatchObject({ kind: "malformed-response" });
+    await expect(provider.thumbnail("neat-updo", signal)).resolves.toMatchObject({ mimeType: "image/jpeg" });
+
+    expect(youcam.requests.filter((request) => request.url.includes("/task/template/"))).toHaveLength(4);
+  });
+
   it("is unavailable when the provider no longer lists a curated template", async () => {
     const { provider } = setup({ templatePages: [[{ id: "female_blunt_bob", thumb: `${FAKE_THUMB_BASE}/x.jpg` }]] });
 
