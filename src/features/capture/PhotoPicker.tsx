@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { useAdapters } from "../../lib/adapters";
+import { CameraIcon, PhotoIcon } from "../../lib/ui/icons";
 import { CameraCapture, type CameraCloseReason } from "./CameraCapture";
 import { imageErrorMessage } from "./imageErrors";
 import { preparePhoto } from "./preparePhoto";
@@ -62,33 +63,52 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
   }
 
   const preparing = state.status === "preparing";
+  const ids = { choose: useId(), chooseDetail: useId(), camera: useId(), cameraDetail: useId() };
 
   return (
-    <section className="photo-picker" aria-labelledby="photo-picker-heading">
-      <h2 id="photo-picker-heading">Photo</h2>
-      <p className="field-hint">
+    <section className="section" aria-labelledby="photo-picker-heading">
+      <h2 id="photo-picker-heading" className="section-title">
+        Photo
+      </h2>
+      <p className="hint">
         Use a JPEG or PNG up to 10 MB and 16 megapixels. Location and camera metadata are removed on this device.
         Nothing is uploaded until you review and agree on the consent step.
       </p>
       {state.status === "camera" ? (
         <CameraCapture onCaptured={(frame) => void prepare(frame, "camera")} onClosed={handleCameraClosed} />
       ) : (
-        <div className="photo-actions">
+        <div className="option-grid">
           <button
             type="button"
-            className="button button-secondary"
+            className="option-tile"
             onClick={() => inputRef.current?.click()}
             disabled={preparing}
+            aria-labelledby={ids.choose}
+            aria-describedby={ids.chooseDetail}
           >
-            Choose a photo
+            <PhotoIcon className="option-icon" />
+            <span id={ids.choose} className="option-title">
+              Choose a photo
+            </span>
+            <span id={ids.chooseDetail} className="option-detail">
+              A JPEG or PNG from this computer
+            </span>
           </button>
           <button
             type="button"
-            className="button button-secondary"
+            className="option-tile"
             onClick={() => setState({ status: "camera" })}
             disabled={preparing}
+            aria-labelledby={ids.camera}
+            aria-describedby={ids.cameraDetail}
           >
-            Use camera
+            <CameraIcon className="option-icon" />
+            <span id={ids.camera} className="option-title">
+              Use camera
+            </span>
+            <span id={ids.cameraDetail} className="option-detail">
+              Take one photo now
+            </span>
           </button>
         </div>
       )}
@@ -102,12 +122,12 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
         onChange={handleFileChange}
       />
       {preparing && (
-        <p className="field-hint" role="status">
+        <p className="status-text" role="status">
           Checking your photo…
         </p>
       )}
       {state.status === "idle" && state.notice && (
-        <p className="field-hint" role="status">
+        <p className="status-text" role="status">
           {state.notice}
         </p>
       )}

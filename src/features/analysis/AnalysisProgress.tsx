@@ -51,15 +51,15 @@ export function AnalysisProgress(props: AnalysisProgressProps) {
   }, [api, jobDescription, image, consent, timing]);
 
   return (
-    <div className="analysis-progress">
-      <div className="progress-bar" aria-hidden="true">
+    <div className="step-stack">
+      <div className="progress-track" aria-hidden="true">
         <span />
       </div>
-      <p className="field-hint">
+      <p className="hint">
         Your photo and job description are being processed by the Interview Fit backend. Cancelling stops the analysis
         and asks the backend to delete the temporary copy.
       </p>
-      <div className="photo-actions">
+      <div className="actions">
         <button type="button" className="button button-secondary" onClick={() => callbacks.current.onCancel()}>
           Cancel analysis
         </button>

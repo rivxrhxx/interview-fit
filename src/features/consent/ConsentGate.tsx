@@ -22,76 +22,90 @@ export function ConsentGate({ onAccept, onDecline }: ConsentGateProps) {
     onAccept(createConsentRecord());
   }
 
+  const groups: Array<{ id: string; title: string; items: string[] }> = [
+    {
+      id: "consent-what",
+      title: "What is sent",
+      items: [
+        "The photo you just confirmed, re-encoded on this device without location or camera metadata.",
+        "The job description text you saved.",
+        "The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner when you cancel or start over.",
+      ],
+    },
+    {
+      id: "consent-why",
+      title: "Why",
+      items: [
+        "To produce optional, neutral suggestions about lighting, framing, background, and attire context.",
+        "To preview one curated interview attire style if you choose to.",
+      ],
+    },
+    {
+      id: "consent-who",
+      title: "Who receives it",
+      items: [
+        "The Interview Fit backend, operated for this app.",
+        "YouCam (Perfect Corp.), the image-analysis and try-on provider the backend uses on Interview Fit's behalf. Its own retention terms apply to its processing.",
+      ],
+    },
+    {
+      id: "consent-never",
+      title: "What Interview Fit never does",
+      items: [
+        "Diagnose health conditions or score appearance or attractiveness.",
+        "Infer personality, emotion, or protected traits, or predict interview or hiring outcomes.",
+        "Keep your photo in app history. Results are saved only if you export them.",
+      ],
+    },
+  ];
+
   return (
-    <form className="consent-gate" onSubmit={handleSubmit} noValidate>
-      <div className="consent-grid">
-        <section aria-labelledby="consent-what">
-          <h2 id="consent-what">What is sent</h2>
-          <ul>
-            <li>The photo you just confirmed, re-encoded on this device without location or camera metadata.</li>
-            <li>The job description text you saved.</li>
-            <li>
-              The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner
-              when you cancel or start over.
-            </li>
-          </ul>
-        </section>
-        <section aria-labelledby="consent-why">
-          <h2 id="consent-why">Why</h2>
-          <ul>
-            <li>To produce optional, neutral suggestions about lighting, framing, background, and attire context.</li>
-            <li>To preview one curated interview attire style if you choose to.</li>
-          </ul>
-        </section>
-        <section aria-labelledby="consent-who">
-          <h2 id="consent-who">Who receives it</h2>
-          <ul>
-            <li>The Interview Fit backend, operated for this app.</li>
-            <li>
-              YouCam (Perfect Corp.), the image-analysis and try-on provider the backend uses on Interview Fit&apos;s
-              behalf. Its own retention terms apply to its processing.
-            </li>
-          </ul>
-        </section>
-        <section aria-labelledby="consent-never">
-          <h2 id="consent-never">What Interview Fit never does</h2>
-          <ul>
-            <li>Diagnose health conditions or score appearance or attractiveness.</li>
-            <li>Infer personality, emotion, or protected traits, or predict interview or hiring outcomes.</li>
-            <li>Keep your photo in app history. Results are saved only if you export them.</li>
-          </ul>
-        </section>
+    <form className="step-stack" onSubmit={handleSubmit} noValidate>
+      <div className="panel consent-panel">
+        {groups.map((group) => (
+          <section key={group.id} className="consent-group" aria-labelledby={group.id}>
+            <h2 id={group.id} className="group-title">
+              {group.title}
+            </h2>
+            <ul className="bullet-list">
+              {group.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
 
-      <div className="consent-control">
-        <input
-          ref={checkboxRef}
-          id={`${errorId}-checkbox`}
-          type="checkbox"
-          checked={agreed}
-          onChange={(event) => {
-            setAgreed(event.target.checked);
-            if (event.target.checked) setShowError(false);
-          }}
-          aria-describedby={showError ? errorId : undefined}
-          aria-invalid={showError || undefined}
-        />
-        <label htmlFor={`${errorId}-checkbox`}>
-          I agree to send this photo and job description to Interview Fit and its provider for this analysis.
+      <div className="field">
+        <label className="consent-check">
+          <input
+            ref={checkboxRef}
+            type="checkbox"
+            checked={agreed}
+            onChange={(event) => {
+              setAgreed(event.target.checked);
+              if (event.target.checked) setShowError(false);
+            }}
+            aria-describedby={showError ? errorId : undefined}
+            aria-invalid={showError || undefined}
+          />
+          <span className="consent-text">
+            I agree to send this photo and job description to Interview Fit and its provider for this analysis.
+          </span>
         </label>
+        {showError && (
+          <p className="field-error" id={errorId}>
+            Check the box to agree, or choose Not now.
+          </p>
+        )}
+        <p className="meta">Consent version {CONSENT_VERSION}</p>
       </div>
-      {showError && (
-        <p className="field-error" id={errorId}>
-          Check the box to agree, or choose Not now.
-        </p>
-      )}
-      <p className="field-hint">Consent version {CONSENT_VERSION}</p>
 
-      <div className="photo-actions">
+      <div className="actions">
         <button type="submit" className="button button-primary">
           Agree and analyze
         </button>
-        <button type="button" className="button button-secondary" onClick={onDecline}>
+        <button type="button" className="button button-text" onClick={onDecline}>
           Not now
         </button>
       </div>

@@ -18,12 +18,12 @@ interface ErrorPanelProps {
 export function ErrorPanel({ code, onRecover }: ErrorPanelProps) {
   const { recovery } = ERROR_POLICY[code];
   return (
-    <div className="photo-actions">
+    <div className="actions">
       <button type="button" className="button button-primary" onClick={() => onRecover(recovery)}>
         {RECOVERY_LABELS[recovery]}
       </button>
       {recovery !== "start-over" && (
-        <button type="button" className="button button-secondary" onClick={() => onRecover("start-over")}>
+        <button type="button" className="button button-text" onClick={() => onRecover("start-over")}>
           Start over
         </button>
       )}

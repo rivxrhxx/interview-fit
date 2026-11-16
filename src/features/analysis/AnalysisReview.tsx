@@ -16,21 +16,23 @@ interface AnalysisReviewProps {
 export function AnalysisReview({ result }: AnalysisReviewProps) {
   const observations = result.observations.filter((observation) => passesContentPolicy(observation.text));
   return (
-    <section className="summary-card" aria-labelledby="observations-heading">
-      <h2 id="observations-heading">What the photo shows</h2>
+    <section className="section" aria-labelledby="observations-heading">
+      <h2 id="observations-heading" className="section-title">
+        What the photo shows
+      </h2>
       {observations.length === 0 ? (
-        <p className="field-hint">No capture observations were returned for this photo.</p>
+        <p className="hint">No capture observations were returned for this photo.</p>
       ) : (
-        <ul className="observation-list">
+        <ul className="rows">
           {observations.map((observation) => (
             <li key={observation.id} data-assessment={observation.assessment}>
-              <span className="observation-category">
-                {CATEGORY_LABELS[observation.category]}
-                <span className="observation-assessment">
-                  {observation.assessment === "ok" ? "Looks fine" : "Could be adjusted"}
-                </span>
+              <div className="row-main">
+                <span className="row-title">{CATEGORY_LABELS[observation.category]}</span>
+                <span className="row-text">{observation.text}</span>
+              </div>
+              <span className={observation.assessment === "ok" ? "badge" : "badge badge-accent"}>
+                {observation.assessment === "ok" ? "Looks fine" : "Could be adjusted"}
               </span>
-              <span>{observation.text}</span>
             </li>
           ))}
         </ul>

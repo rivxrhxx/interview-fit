@@ -60,7 +60,7 @@ function TryOnRunner({
   }, [api, analysisJobId, timing]);
 
   return (
-    <div className="progress-bar" aria-hidden="true">
+    <div className="progress-track" aria-hidden="true">
       <span />
     </div>
   );
@@ -79,13 +79,15 @@ export function TryOnStep(props: TryOnStepProps) {
     };
   }, [api, readyJob]);
 
+  const retryable = phase.status === "failed" && ERROR_POLICY[phase.code].retryable;
+
   return (
     <div className="step-stack">
-      <section className="summary-card" aria-label="Curated style">
-        <p className="eyebrow-label">Curated style</p>
-        <h2 id="curated-style-heading">{CURATED_STYLE.label}</h2>
-        <p className="field-hint">{CURATED_STYLE.description}</p>
-        <p className="field-hint">The preview is not saved. Only an explicit export creates a file.</p>
+      <section className="panel" aria-label="Curated style">
+        <p className="eyebrow">Curated style</p>
+        <h2 className="section-title">{CURATED_STYLE.label}</h2>
+        <p className="hint">{CURATED_STYLE.description}</p>
+        <p className="meta">The preview is not saved. Only an explicit export creates a file.</p>
       </section>
 
       {phase.status === "running" && <TryOnRunner key={props.attempt} {...props} />}
@@ -93,10 +95,15 @@ export function TryOnStep(props: TryOnStepProps) {
         <TryOnCompare original={props.original} preview={phase.preview} styleLabel={CURATED_STYLE.label} />
       )}
 
-      <div className="photo-actions">
+      <div className="actions">
         {phase.status === "idle" && (
           <button type="button" className="button button-primary" onClick={props.onStart}>
             Generate preview
+          </button>
+        )}
+        {retryable && (
+          <button type="button" className="button button-primary" onClick={props.onStart}>
+            Try again
           </button>
         )}
         {phase.status === "running" && (
@@ -105,22 +112,22 @@ export function TryOnStep(props: TryOnStepProps) {
           </button>
         )}
         {phase.status === "ready" && (
+          <button type="button" className="button button-primary" onClick={props.onContinue}>
+            Continue to report
+          </button>
+        )}
+        {phase.status === "ready" && (
           <button type="button" className="button button-secondary" onClick={props.onReset}>
             Reset preview
           </button>
         )}
-        {phase.status === "failed" && ERROR_POLICY[phase.code].retryable && (
-          <button type="button" className="button button-primary" onClick={props.onStart}>
-            Try again
-          </button>
-        )}
-        {phase.status !== "running" && (
+        {(phase.status === "idle" || phase.status === "failed") && (
           <button type="button" className="button button-secondary" onClick={props.onContinue}>
             Continue to report
           </button>
         )}
         {phase.status !== "running" && (
-          <button type="button" className="button button-secondary" onClick={props.onClose}>
+          <button type="button" className="button button-text" onClick={props.onClose}>
             Back to guidance
           </button>
         )}

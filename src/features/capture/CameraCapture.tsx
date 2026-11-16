@@ -97,19 +97,19 @@ export function CameraCapture({ onCaptured, onClosed }: CameraCaptureProps) {
   }
 
   return (
-    <div className="camera-capture">
-      <div className="photo-frame camera-frame">
+    <div className="step-stack">
+      <div className="photo-frame">
         {phase === "requesting" ? (
-          <p className="field-hint">Waiting for camera permission…</p>
+          <p className="hint">Waiting for camera permission…</p>
         ) : (
           <video ref={videoRef} aria-label="Camera preview" autoPlay muted playsInline />
         )}
       </div>
-      <div className="photo-actions">
+      <div className="actions">
         <button type="button" className="button button-primary" onClick={takePhoto} disabled={phase !== "live"}>
           Take photo
         </button>
-        <button type="button" className="button button-secondary" onClick={() => close("cancelled")}>
+        <button type="button" className="button button-text" onClick={() => close("cancelled")}>
           Cancel camera
         </button>
       </div>
