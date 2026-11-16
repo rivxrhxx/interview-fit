@@ -129,7 +129,7 @@ From an external review before submission.
   - Tests first: repeated key returns the same job, DELETE by key before and after creation, connection closed before the response, desktop cancels by key on abort
   - Verify: `npm run verify:fast`
 
-- [ ] 13.5 Delete the analysis result when a finished analysis is deleted
+- [x] 13.5 Delete the analysis result when a finished analysis is deleted
   - Requirements: R4.7
   - Tests first: GET after DELETE returns no result; try-on refused
   - Verify: `npm run verify:fast`

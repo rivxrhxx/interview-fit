@@ -163,7 +163,11 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
         record.abort?.abort(new Error("cancelled"));
         finish(record, "cancelled", null);
       } else {
+        // Deleting a finished job deletes everything derived from the photo, not only the image (R4.7).
         store.wipeImage(record);
+        record.result = null;
+        record.jobDescription = null;
+        if (record.state === "succeeded") record.state = "cancelled";
         record.expiresAt = Math.min(record.expiresAt, now() + options.terminalRetentionMs);
       }
       return record;
