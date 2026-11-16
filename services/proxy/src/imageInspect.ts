@@ -65,26 +65,56 @@ function isJpegMetadataMarker(marker: number): boolean {
   return (marker >= 0xe1 && marker <= 0xed) || marker === 0xef || marker === 0xfe;
 }
 
+/** End of the entropy-coded data that starts at `start`: the next real marker (not FF00, RSTn, or fill). */
+function scanDataEnd(bytes: Uint8Array, start: number): number {
+  let index = start;
+  while (index + 1 < bytes.length) {
+    if (bytes[index] !== 0xff) {
+      index += 1;
+      continue;
+    }
+    const next = bytes[index + 1];
+    if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) index += 2;
+    else if (next === 0xff) index += 1;
+    else return index;
+  }
+  return bytes.length;
+}
+
+/** Walks every segment, including those between progressive scans, and truncates after EOI. */
 function stripJpeg(bytes: Uint8Array): Uint8Array | null {
   const parts: Uint8Array[] = [bytes.subarray(0, 2)];
   let offset = 2;
-  while (offset + 4 <= bytes.length) {
+  while (offset + 2 <= bytes.length) {
     if (bytes[offset] !== 0xff) return null;
     const marker = bytes[offset + 1];
-    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+    if (marker === 0xff) {
+      offset += 1;
+      continue;
+    }
+    if (marker === 0xd9) {
+      // End of image: anything after it (MPF images, trailers) is dropped.
+      parts.push(bytes.subarray(offset, offset + 2));
+      return concat(parts);
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       parts.push(bytes.subarray(offset, offset + 2));
       offset += 2;
       continue;
     }
+    if (offset + 4 > bytes.length) return null;
     const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
-    if (length < 2 || offset + 2 + length > bytes.length) return null;
+    const segmentEnd = offset + 2 + length;
+    if (length < 2 || segmentEnd > bytes.length) return null;
     if (marker === 0xda) {
-      // Start of scan: the rest is entropy-coded image data and the end marker.
-      parts.push(bytes.subarray(offset));
-      return concat(parts);
+      const dataEnd = scanDataEnd(bytes, segmentEnd);
+      if (dataEnd >= bytes.length) return null;
+      parts.push(bytes.subarray(offset, dataEnd));
+      offset = dataEnd;
+      continue;
     }
-    if (!isJpegMetadataMarker(marker)) parts.push(bytes.subarray(offset, offset + 2 + length));
-    offset += 2 + length;
+    if (!isJpegMetadataMarker(marker)) parts.push(bytes.subarray(offset, segmentEnd));
+    offset = segmentEnd;
   }
   return null;
 }

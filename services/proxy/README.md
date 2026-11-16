@@ -31,6 +31,10 @@ All settings come from the backend environment. Never put provider credentials i
 | `JOB_TTL_MS` | `900000` | How long a finished job and its image are kept for try-on |
 | `TERMINAL_RETENTION_MS` | `60000` | How long a failed or cancelled job record (without image) stays readable |
 | `RATE_LIMIT_PER_MINUTE` | `10` | Job creations per client address |
+| `MAX_LIVE_JOBS` | `50` | Stored jobs before new uploads get `PROCESSING_UNAVAILABLE` |
+| `MAX_RETAINED_BYTES` | `268435456` | Image bytes held in memory across jobs and try-on results before new uploads are refused |
+| `SWEEP_INTERVAL_MS` | `30000` | Expiry sweep interval; at least 1000 so expired images never wait for a lookup |
+| `YOUCAM_STORAGE_HOSTS` | (none) | Optional comma-separated host suffixes allowed for pre-signed upload and result URLs. Set it in production once the provider's storage hosts are known |
 
 ## YouCam data minimization
 
@@ -41,6 +45,13 @@ YouCam's analysis tools are skin analysis (dermatological, excluded by the produ
 - Task creation is never retried, so a transient error cannot charge units twice. Only status reads are retried.
 - The API key is sent only to the configured API host, never to the pre-signed upload URL.
 - Provider file IDs, task IDs, result URLs, and messages stay inside the adapter.
+
+## Cancellation and retention
+
+- `DELETE /v1/analysis-jobs/{id}` cancels a job, zeroes its image, and deletes every try-on made from it.
+- `DELETE /v1/analysis-jobs` with the upload's `Idempotency-Key` cancels a job whose ID the client never received (cancel during upload). It never creates anything and always answers 204. If the upload is still in flight, the key is remembered for 60 seconds and the job is cancelled before any provider call.
+- Expired jobs are swept on a timer. Their images are zeroed, and try-on results made from them are deleted with them.
+- Requests time out after 30 seconds (10 seconds for headers).
 
 ## Virtual try-on
 
@@ -55,5 +66,7 @@ YouCam documents that task results stay queryable for 24 hours and result URLs f
 ## Production notes
 
 - Put the proxy behind TLS and add the deployed origin to the desktop CSP `connect-src` and `VITE_INTERVIEW_FIT_API_BASE_URL`.
+- Rate limiting is keyed by the socket address. Behind a reverse proxy, all users share one bucket, and IPv6 address rotation can bypass it. Add trusted-proxy handling and per-client authentication before a public deployment.
+- `ALLOWED_ORIGINS` defaults include the Vite dev origin `http://localhost:1420`. Set it explicitly in production.
 - The MVP has no end-user authentication. Job IDs are 143-bit random capability tokens, and rate limiting is per client address. A public deployment needs client authentication and abuse protection.
 - A live YouCam smoke test needs a real key and consumes units. It is opt-in and has not been run.

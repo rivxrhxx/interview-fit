@@ -26,12 +26,14 @@ export interface JobStore {
   /** Test and diagnostics access to every stored record. */
   list(): AnalysisJobRecord[];
   size(): number;
+  /** Image bytes currently held in memory. */
+  retainedBytes(): number;
   wipeImage(record: AnalysisJobRecord): void;
   sweep(): void;
   clear(): void;
 }
 
-export function createJobStore(now: () => number): JobStore {
+export function createJobStore(now: () => number, hooks: { onRemove?: (id: string) => void } = {}): JobStore {
   const jobs = new Map<string, AnalysisJobRecord>();
 
   function wipeImage(record: AnalysisJobRecord) {
@@ -45,6 +47,7 @@ export function createJobStore(now: () => number): JobStore {
     wipeImage(record);
     record.jobDescription = null;
     jobs.delete(record.id);
+    hooks.onRemove?.(record.id);
   }
 
   return {
@@ -63,6 +66,7 @@ export function createJobStore(now: () => number): JobStore {
     peek: (id) => jobs.get(id),
     list: () => [...jobs.values()],
     size: () => jobs.size,
+    retainedBytes: () => [...jobs.values()].reduce((sum, record) => sum + (record.image?.length ?? 0), 0),
     wipeImage,
     sweep() {
       const current = now();

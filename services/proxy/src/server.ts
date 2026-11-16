@@ -120,7 +120,9 @@ function toPublicTryOn(record: TryOnJobRecord): TryOnJob {
 export function createProxy(deps: ProxyDeps): Proxy {
   const { config, logger } = deps;
   const now = deps.now ?? Date.now;
-  const store = createJobStore(now);
+  // Deleting or expiring an analysis job also deletes try-on results made from it.
+  let tryOnCascade: ((analysisJobId: string) => void) | undefined;
+  const store = createJobStore(now, { onRemove: (id) => tryOnCascade?.(id) });
   const jobs = createAnalysisJobs({
     store,
     provider: deps.provider,
@@ -141,8 +143,12 @@ export function createProxy(deps: ProxyDeps): Proxy {
         providerTimeoutMs: config.providerTimeoutMs,
       })
     : null;
+  tryOnCascade = (id) => tryOns?.removeForAnalysis(id);
   const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
   const idempotency = new Map<string, string>();
+  /** Keys cancelled before their upload finished; the job is cancelled as soon as it exists. */
+  const tombstones = new Map<string, number>();
+  const TOMBSTONE_MS = 60_000;
 
   function idempotencyKey(request: IncomingMessage): string | null {
     const header = request.headers["idempotency-key"];
@@ -200,6 +206,10 @@ export function createProxy(deps: ProxyDeps): Proxy {
       request.resume();
       throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
     }
+    if (store.size() >= config.maxLiveJobs) {
+      request.resume();
+      throw new HttpError("PROCESSING_UNAVAILABLE");
+    }
 
     const contentType = request.headers["content-type"] ?? "";
     if (!contentType.startsWith("multipart/form-data")) {
@@ -231,9 +241,18 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const clean = stripImageMetadata(image, inspection.info.mimeType);
     image.fill(0);
     if (!clean) throw new HttpError("IMAGE_INVALID");
+    if (store.retainedBytes() + (tryOns?.retainedBytes() ?? 0) + clean.length > config.maxRetainedBytes) {
+      clean.fill(0);
+      throw new HttpError("PROCESSING_UNAVAILABLE");
+    }
 
     const record = jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info });
     if (key) idempotency.set(key, record.id);
+    if (key && tombstones.has(key)) {
+      // The client already cancelled this upload: stop before any provider call.
+      tombstones.delete(key);
+      jobs.cancel(record.id);
+    }
     return record;
   }
 
@@ -286,11 +305,41 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const method = request.method ?? "GET";
 
     if (path === ROUTES.collection) {
+      if (method === "DELETE") {
+        // Cancel by Idempotency-Key, for a client that cancelled before it learned the job ID.
+        // Never creates anything and reveals nothing: always 204.
+        request.resume();
+        const key = idempotencyKey(request);
+        if (key) {
+          const existing = store.get(idempotency.get(key) ?? "");
+          if (existing) {
+            jobs.cancel(existing.id);
+            tryOns?.removeForAnalysis(existing.id);
+          } else {
+            tombstones.set(key, now() + TOMBSTONE_MS);
+          }
+        }
+        response.writeHead(204, { ...cors, "Cache-Control": "no-store" });
+        response.end();
+        return "/v1/analysis-jobs";
+      }
       if (method !== "POST") {
         request.resume();
-        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, OPTIONS" } });
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, DELETE, OPTIONS" } });
       }
       const record = await createJob(request);
+      // If the client is gone before it learns the job ID (cancel during upload),
+      // nobody can delete the job, so cancel it here (R4.4). HTTP/1.1 clients do
+      // not half-close, so a received FIN also means the client went away.
+      // Clients that cancel later use DELETE with their Idempotency-Key.
+      const socket = request.socket;
+      if (socket.destroyed || socket.readableEnded || response.destroyed) {
+        jobs.cancel(record.id);
+        return "/v1/analysis-jobs";
+      }
+      response.once("close", () => {
+        if (!response.writableFinished) jobs.cancel(record.id);
+      });
       send(response, 202, toPublicJob(record), cors);
       return "/v1/analysis-jobs";
     }
@@ -304,6 +353,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
       } else if (method === "DELETE") {
         const record = jobs.cancel(lookup(id).id as AnalysisJobId);
         if (!record) throw new HttpError("JOB_NOT_FOUND");
+        tryOns?.removeForAnalysis(record.id);
         send(response, 200, toPublicJob(record), cors);
       } else {
         throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, DELETE, OPTIONS" } });
@@ -392,6 +442,10 @@ export function createProxy(deps: ProxyDeps): Proxy {
     }
   });
 
+  // Slow or stalled uploads cannot hold connections open for Node's 300-second default.
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 10_000;
+
   const sweeper =
     config.sweepIntervalMs > 0
       ? setInterval(() => {
@@ -399,6 +453,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
           tryOns?.sweep();
           limiter.prune();
           for (const [key, id] of idempotency) if (!store.peek(id)) idempotency.delete(key);
+          for (const [key, expiresAt] of tombstones) if (expiresAt <= now()) tombstones.delete(key);
         }, config.sweepIntervalMs)
       : undefined;
   sweeper?.unref();

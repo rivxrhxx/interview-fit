@@ -33,6 +33,48 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 && value.length <= 512 ? value : null;
 }
 
+/** Accepts only https URLs without credentials, on an allowlisted host when one is configured. */
+function safeStorageUrl(value: unknown, allowedHosts: string[] | null): string | null {
+  const location = nonEmptyString(value);
+  if (!location) return null;
+  let url: URL;
+  try {
+    url = new URL(location);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password) return null;
+  const host = url.hostname.toLowerCase();
+  if (allowedHosts && !allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) return null;
+  return location;
+}
+
+/** Reads a response body with a running byte cap instead of buffering it whole. */
+async function readCapped(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  if (!response.body) return null;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      chunks.forEach((chunk) => chunk.fill(0));
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) return reject(signal.reason);
@@ -107,17 +149,8 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
       const entry = Array.isArray(files) ? record(files[0]) : null;
       const fileId = nonEmptyString(entry?.file_id);
       const upload = Array.isArray(entry?.requests) ? record(entry.requests[0]) : null;
-      const uploadUrl = nonEmptyString(upload?.url);
+      const uploadUrl = safeStorageUrl(upload?.url, config.storageHosts);
       if (!fileId || !upload || !uploadUrl || upload.method !== "PUT") throw new ProviderError("malformed-response");
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(uploadUrl);
-      } catch {
-        throw new ProviderError("malformed-response");
-      }
-      if (parsedUrl.protocol !== "https:" || parsedUrl.username || parsedUrl.password) {
-        throw new ProviderError("malformed-response");
-      }
 
       const uploadHeaders = new Headers();
       for (const [name, value] of Object.entries(record(upload.headers) ?? {})) {
@@ -149,16 +182,8 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
     },
 
     async downloadResult(url, maxBytes, signal) {
-      const location = nonEmptyString(url);
-      let parsed: URL | null = null;
-      try {
-        parsed = location ? new URL(location) : null;
-      } catch {
-        parsed = null;
-      }
-      if (!location || !parsed || parsed.protocol !== "https:" || parsed.username || parsed.password) {
-        throw new ProviderError("malformed-response");
-      }
+      const location = safeStorageUrl(url, config.storageHosts);
+      if (!location) throw new ProviderError("malformed-response");
       let response: Response;
       try {
         response = await fetchImpl(location, { method: "GET", redirect: "error", signal });
@@ -171,8 +196,8 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
       if (response.status !== 200) throw new ProviderError("malformed-response");
       const declared = Number(response.headers.get("content-length") ?? "0");
       if (declared > maxBytes) throw new ProviderError("malformed-response");
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length === 0 || bytes.length > maxBytes) throw new ProviderError("malformed-response");
+      const bytes = await readCapped(response, maxBytes);
+      if (!bytes || bytes.length === 0) throw new ProviderError("malformed-response");
       return bytes;
     },
 
