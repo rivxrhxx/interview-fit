@@ -1,3 +1,4 @@
+import { createClaudeWriter, loadClaudeConfig } from "./ai/claude.ts";
 import { loadConfig } from "./config.ts";
 import { stdoutLogger } from "./logger.ts";
 import { createSimulatorProvider, createSimulatorTryOnProvider } from "./providers/simulator.ts";
@@ -16,10 +17,20 @@ const provider: AnalysisProvider = youcam
 const tryOnProvider: TryOnProvider = youcam
   ? createYouCamTryOnProvider({ config: youcam, logger: stdoutLogger })
   : createSimulatorTryOnProvider(config.simulator);
-const proxy = createProxy({ config, provider, tryOnProvider, logger: stdoutLogger });
+// Without ANTHROPIC_API_KEY the deterministic rules engine writes the job analysis and suggestions.
+const claude = loadClaudeConfig(process.env);
+const ai = claude ? createClaudeWriter({ config: claude, logger: stdoutLogger }) : null;
+const proxy = createProxy({ config, provider, tryOnProvider, ai, logger: stdoutLogger });
 
 proxy.server.listen(config.port, config.host, () => {
-  stdoutLogger.log({ level: "info", event: "proxy_listening", host: config.host, port: config.port, provider: config.provider });
+  stdoutLogger.log({
+    level: "info",
+    event: "proxy_listening",
+    host: config.host,
+    port: config.port,
+    provider: config.provider,
+    ai: claude ? claude.model : "rules",
+  });
 });
 
 function stop() {

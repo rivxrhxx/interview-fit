@@ -38,6 +38,9 @@ All settings come from the backend environment. Never put provider credentials i
 | `MAX_RETAINED_BYTES` | `268435456` | Image bytes held in memory across jobs and try-on results before new uploads are refused |
 | `SWEEP_INTERVAL_MS` | `30000` | Expiry sweep interval; at least 1000 so expired images never wait for a lookup |
 | `YOUCAM_STORAGE_HOSTS` | (none) | Optional comma-separated host suffixes allowed for pre-signed upload and result URLs. Set it in production once the provider's storage hosts are known |
+| `ANTHROPIC_API_KEY` | (none) | Optional. Enables Claude for the job analysis and suggestions. Without it, the deterministic rules engine is used |
+| `ANTHROPIC_MODEL` | `claude-opus-5-5` | Claude model for both calls |
+| `ANTHROPIC_TIMEOUT_MS` | `25000` | Per-call timeout; on timeout the rules engine answers instead |
 
 ## YouCam data minimization
 
@@ -48,6 +51,16 @@ YouCam's analysis tools are skin analysis (dermatological, excluded by the produ
 - Task creation is never retried, so a transient error cannot charge units twice. Only status reads are retried.
 - The API key is sent only to the configured API host, never to the pre-signed upload URL.
 - Provider file IDs, task IDs, result URLs, and messages stay inside the adapter.
+
+## Job analysis and AI suggestions
+
+`POST /v1/job-analyses` takes `{ jobDescription, locale }` as JSON and returns role, industry, atmosphere, interview format, and dress code, each with a verbatim quote from the posting or marked as not stated, plus a suggested dress formality. No image is involved, so no consent version is required; the desktop shows a notice before sending.
+
+- With `ANTHROPIC_API_KEY`, Claude writes the analysis and the suggestions through the official `@anthropic-ai/sdk` with structured JSON output, low effort, and the server-side refusal fallback. The posting is wrapped in `<job_posting>` delimiters as untrusted data.
+- Claude sees text only: the posting for the analysis, then the checked analysis and neutral observation text for the suggestions. Image bytes, provider scores, and face attributes are never sent.
+- Every AI answer goes through the same checks as the rules engine: quotes must appear verbatim in the posting, all text must pass the content policy, and suggestions must cite known cue, point, or observation IDs. Anything that fails is dropped, and an outage, refusal, timeout, or unusable answer falls back to the rules engine. The result says which one answered (`source: "ai"` or `"rules"`).
+- Analyses are cached in memory for `JOB_TTL_MS`, keyed by a SHA-256 hash of the text and locale, so the photo analysis reuses the one the user saw without a second AI call.
+- Logs record only the operation, HTTP status, stop reason, duration, and a coarse failure kind. Prompts, replies, and job text are never logged.
 
 ## Cancellation and retention
 
