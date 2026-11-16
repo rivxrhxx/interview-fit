@@ -82,7 +82,7 @@ export const ko: Messages = {
     "start-over": "처음부터 다시",
   },
   notices: {
-    consentDeclined: "사진을 지웠고 아무것도 업로드하지 않았어요. 공고를 수정하거나 다른 사진을 고를 수 있어요.",
+    consentDeclined: "사진을 지웠고 업로드하지 않았어요. 공고를 수정하거나 다른 사진을 고를 수 있어요.",
     jobAnalyzing: "공고를 읽고 있어요…",
     uploading: "사진을 안전하게 올리고 있어요…",
     processing: "촬영 상태를 분석하고 있어요…",
@@ -130,7 +130,7 @@ export const ko: Messages = {
   },
   photo: {
     title: "사진",
-    hint: "10MB, 1,600만 화소 이하의 JPEG 또는 PNG를 써 주세요. 위치와 카메라 정보는 이 기기에서 지워요. 동의하기 전에는 아무것도 올리지 않아요.",
+    hint: "10MB, 1,600만 화소 이하의 JPEG 또는 PNG를 써 주세요. 위치와 카메라 정보는 이 기기에서 지워요. 동의하기 전에는 사진을 올리지 않아요.",
     choose: "사진 고르기",
     chooseDetail: "이 컴퓨터에 있는 JPEG 또는 PNG",
     camera: "카메라로 찍기",

@@ -54,8 +54,16 @@ const HOOK_FIELDS = new Set(["name", "description", "trigger", "matcher", "actio
 /** Paths each committed hook must (and must not) fire for; matchers are regexes against the file path. */
 const HOOK_MATCHER_CASES = {
   "TypeScript quality gate": {
-    matches: ["src/app/App.tsx", "src/lib/api/client.ts", "services/proxy/src/server.ts", "/work/interview-fit/packages/contracts/src/policy.ts"],
-    ignores: ["README.md", "src/app/App.css", "src-tauri/src/lib.rs", "scripts/scan-repo.mjs"],
+    matches: [
+      "src/app/App.tsx",
+      "src/lib/api/client.ts",
+      "services/proxy/src/server.ts",
+      "services/proxy/test/try-on.integration.test.ts",
+      "scripts/generate-demo-photo.ts",
+      "vite.config.ts",
+      "/work/interview-fit/packages/contracts/src/policy.ts",
+    ],
+    ignores: ["README.md", "src/app/App.css", "src-tauri/src/lib.rs", "scripts/scan-repo.mjs", "package.json"],
   },
   "Privacy boundary review": {
     matches: [
@@ -67,9 +75,19 @@ const HOOK_MATCHER_CASES = {
       "src/features/analysis/AnalysisProgress.tsx",
       "src/features/report/buildReport.ts",
       "src/lib/api/client.ts",
+      "src/lib/adapters.tsx",
+      "src/app/App.tsx",
+      "src/app/flowReducer.ts",
       "/work/interview-fit/packages/contracts/src/consent.ts",
     ],
-    ignores: ["src/app/App.css", "src/app/StepProgress.tsx", "src/features/recommendation/RecommendationList.tsx", "README.md", ".kiro/steering/product.md"],
+    ignores: [
+      "src/app/App.css",
+      "src/app/StepProgress.tsx",
+      "src/app/flowReducer.test.ts",
+      "src/features/recommendation/RecommendationList.tsx",
+      "README.md",
+      ".kiro/steering/product.md",
+    ],
   },
 };
 
@@ -108,6 +126,10 @@ for (const file of hookFiles.filter((file) => file.endsWith(".json"))) {
       if (typeof action.command !== "string" || !action.command.trim()) errors.push(`${at}: command action needs a "command"`);
     } else {
       errors.push(`${at}: action.type must be "agent" or "command"`);
+    }
+    // Kiro CLI is written in Rust, whose regex engine has no lookaround or backreferences.
+    if (typeof hook?.matcher === "string" && /\(\?<?[=!]|\\[1-9]|\\k</.test(hook.matcher)) {
+      errors.push(`${at}: matcher uses lookaround or a backreference, which Rust regexes do not support`);
     }
     if (hook?.matcher !== undefined) {
       let matcher;

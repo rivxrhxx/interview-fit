@@ -65,7 +65,12 @@ export async function runTryOn(options: RunTryOnOptions): Promise<TryOnOutcome> 
     }
 
     if (job.state === "failed") return { status: "failed", code: job.error?.code ?? "INTERNAL_ERROR" };
-    if (job.state === "cancelled") return { status: "cancelled" };
+    if (job.state === "cancelled") {
+      // Stopped by the backend, not by this user (for example replaced or out of capacity):
+      // report a retryable failure so the screen never stays on "running".
+      if (signal.aborted) throw new PollCancelled();
+      return { status: "failed", code: "PROCESSING_UNAVAILABLE" };
+    }
     if (signal.aborted) throw new PollCancelled();
     try {
       return { status: "succeeded", preview: await api.getTryOnResult(job.id, signal) };

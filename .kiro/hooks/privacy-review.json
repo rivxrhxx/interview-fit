@@ -3,9 +3,9 @@
   "hooks": [
     {
       "name": "Privacy boundary review",
-      "description": "After the agent saves a file on a privacy boundary (native code, backend, photo upload, capture, consent, job text, try-on, report, API and Tauri adapters, consent and policy contracts), review the diff for leaks and excessive permissions.",
+      "description": "After the agent saves a file on a privacy boundary (native code, backend, photo upload, capture, consent, job text, try-on, report, API, Tauri, and media adapters and their wiring, consent gating and backend cleanup in the app flow, consent and policy contracts), review the diff for leaks and excessive permissions.",
       "trigger": "PostFileSave",
-      "matcher": "(^|/)(src-tauri/|services/proxy/|src/features/(analysis|capture|consent|job-posting|try-on|report)/|src/lib/(api|tauri|media)/|packages/contracts/src/(consent|policy)\\.ts$)",
+      "matcher": "(^|/)(src-tauri/|services/proxy/|src/features/(analysis|capture|consent|job-posting|try-on|report)/|src/lib/(api|tauri|media)/|src/lib/adapters\\.tsx$|src/app/(App\\.tsx|flowReducer\\.ts)$|packages/contracts/src/(consent|policy)\\.ts$)",
       "enabled": true,
       "action": {
         "type": "agent",

@@ -105,7 +105,7 @@ describe("consent gate in the flow", () => {
 
     network.expectNothingSent();
     expect(revoke).toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent("Your photo was discarded and nothing was uploaded.");
+    expect(screen.getByRole("status")).toHaveTextContent("Your photo was discarded and was not uploaded.");
     expect(screen.queryByRole("img", { name: "Selected photo preview" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Edit job description" }));
     expect(screen.getByLabelText("Job description")).toHaveValue("Client-facing consultant, video interviews");
@@ -173,7 +173,7 @@ describe("copy matches what has actually left the device (R3.5)", () => {
     collect(messages);
 
     for (const text of all) {
-      expect(text).not.toMatch(/nothing (leaves|is sent|goes)|아무것도[^.]*(기기 밖|전송|보내|나가)/i);
+      expect(text).not.toMatch(/nothing (leaves|is sent|goes|is uploaded|was uploaded)|아무것도[^.]*(기기 밖|전송|보내|나가|올리|업로드)/i);
       expect(text).not.toMatch(/^(Nothing was saved\.|저장된 건 없어요)/);
     }
   });

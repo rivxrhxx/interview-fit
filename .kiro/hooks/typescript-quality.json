@@ -3,9 +3,9 @@
   "hooks": [
     {
       "name": "TypeScript quality gate",
-      "description": "After the agent saves a TypeScript file in the desktop app, backend, or contracts, run the fast harness and fix only errors the edit caused.",
+      "description": "After the agent saves any TypeScript file (desktop app, backend, contracts, tests, scripts, or build config; all are typechecked), run the fast harness and fix only errors the edit caused.",
       "trigger": "PostFileSave",
-      "matcher": "(^|/)src/.+\\.tsx?$",
+      "matcher": "\\.(ts|tsx)$",
       "enabled": true,
       "action": {
         "type": "agent",

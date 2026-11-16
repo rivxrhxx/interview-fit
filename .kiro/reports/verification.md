@@ -78,3 +78,29 @@ A separate read-only reviewer reported 3 high, 3 medium, and 3 low findings, two
 | 9 | The photo step could show a different analysis than the job step | The analysis cache now lasts at least an hour. A language switch between the two steps still produces a fresh analysis in the new language |
 
 After the fixes, `npm run verify` exited 0: 503 tests, the production web build, and 22 Rust tests. Task 12.6 stays open until a manual golden path with a real, permissioned face photo runs against the live backend.
+
+## Review fixes 2026-11-17 (tasks 13.1-13.6)
+
+An external review before submission reported six issues. Each fix has its own branch, tests written first, and a requirement (R3.5, R4.5-R4.7, R7.3).
+
+| Task | Finding | Fix | Evidence |
+|---|---|---|---|
+| 13.1 | Hooks used the pre-1.0 `.kiro.hook` format (`when`/`then`, `askAgent`, `fileEdited`) and would not run | `.kiro/hooks/*.json`, `"version": "v1"`, `PostFileSave` with regex `matcher`, `agent` actions; legacy files removed | `npm run verify:harness` (schema, Rust-compatible regex, sample paths). Live Kiro run still to be recorded |
+| 13.2 | Consent said "Nothing leaves your device", but the posting is sent at the job-analysis step | Copy now limits the claim to the photo; the error step names Interview Fit; a test rejects "nothing leaves / is sent / is uploaded" claims in both languages | `src/features/consent/consent.privacy.test.tsx` |
+| 13.3 | Try-on results bypassed `MAX_RETAINED_BYTES` (a 500-byte limit held 666 bytes) | Reserve twice the photo size before starting, recheck the real size before storing, zero results that do not fit, one try-on per analysis, `MAX_ACTIVE_TRY_ONS` (3) | `services/proxy/test/try-on.integration.test.ts` samples retained bytes every millisecond |
+| 13.4 | A try-on cancelled before its ID arrived kept running | `Idempotency-Key` on try-on creation, `DELETE /v1/try-on-jobs` by key, cancel on early connection close, shared registry | Server and client tests, including raw-socket disconnects |
+| 13.5 | Deleting a finished analysis left its result readable | Result and job text are cleared and the state becomes `cancelled` | `services/proxy/test/analysis-jobs.integration.test.ts` |
+| 13.6 | Closing the try-on screen made the report say no preview was created | Session-level `lastTryOn` | `src/app/flowReducer.test.ts`, `src/features/try-on/TryOnFlow.test.tsx` |
+
+A separate read-only reviewer then checked these fixes and reported 2 medium and 4 low findings, three of them reproduced with probes. All were fixed with regression tests:
+
+| Severity | Finding | Fix |
+|---|---|---|
+| Medium | The photo hint and the consent-declined notice still said nothing was uploaded | Both now speak about the photo only; the copy test also rejects "uploaded" / "업로드" / "올리" claims |
+| Medium | A try-on cancelled by the backend (replaced, closed connection) left the screen on "running" | The desktop treats a cancel it did not request as a retryable failure |
+| Low | Two in-flight requests with the same key created two jobs, and the later try-on cancelled the earlier | The key is checked again after the body arrives, for try-ons and uploads |
+| Low | A try-on refused for capacity, or cancelled by key before it arrived, still deleted the previous result | Capacity is checked as if the previous try-on were gone, and it is discarded only after acceptance; a request cancelled first gets `JOB_NOT_FOUND` and changes nothing |
+| Low | Hook matchers missed tests, scripts, build config, and the app files that wire adapters and consent; the validator accepted regexes Rust rejects | Broadened matchers, Rust-compatibility check |
+| Low | Cancel-by-key tombstones were unbounded | At most 1,024, oldest dropped first |
+
+The reviewer also noted that a provider ignoring cancellation could leave a result on a removed try-on; removed try-ons are now marked ended so a late result is zeroed.

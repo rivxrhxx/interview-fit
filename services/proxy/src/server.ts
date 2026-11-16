@@ -252,6 +252,12 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const clean = stripImageMetadata(image, inspection.info.mimeType);
     image.fill(0);
     if (!clean) throw new HttpError("IMAGE_INVALID");
+    // A retry with the same key may have finished while this body was arriving.
+    const raced = key ? store.get(analysisKeys.lookup(key) ?? "") : undefined;
+    if (raced) {
+      clean.fill(0);
+      return raced;
+    }
     if (retainedBytes() + clean.length > config.maxRetainedBytes) {
       clean.fill(0);
       throw new HttpError("PROCESSING_UNAVAILABLE");
@@ -346,6 +352,11 @@ export function createProxy(deps: ProxyDeps): Proxy {
     // Only a successful, still-retained, consented analysis image can be used (R6.1).
     if (analysis.state !== "succeeded" || !analysis.image || !analysis.imageInfo) throw new HttpError("JOB_NOT_FOUND");
     if (!tryOns) throw new HttpError("PROCESSING_UNAVAILABLE");
+    // A retry with the same key may have finished while this body was arriving.
+    const raced = key ? tryOns.get(tryOnKeys.lookup(key) ?? "") : undefined;
+    if (raced) return raced;
+    // Already cancelled by key before it arrived (R4.5): create nothing and touch nothing.
+    if (key && tryOnKeys.takeTombstone(key)) throw new HttpError("JOB_NOT_FOUND");
     let record: TryOnJobRecord;
     try {
       record = tryOns.create(analysis, fields.styleId as TryOnStyleId);
@@ -355,8 +366,6 @@ export function createProxy(deps: ProxyDeps): Proxy {
       throw new HttpError("PROCESSING_UNAVAILABLE");
     }
     if (key) tryOnKeys.remember(key, record.id);
-    // The client already cancelled this request: stop before any provider call (R4.5).
-    if (key && tryOnKeys.takeTombstone(key)) tryOns.cancel(record.id);
     return record;
   }
 
