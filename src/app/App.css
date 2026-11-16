@@ -330,3 +330,47 @@ main:focus-visible {
   -webkit-line-clamp: 6;
   line-clamp: 6;
 }
+
+/* Step layout */
+.step-stack {
+  display: grid;
+  gap: 20px;
+}
+
+/* Photo selection and preview */
+.photo-picker,
+.photo-preview {
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.photo-picker h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.photo-frame {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.photo-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
