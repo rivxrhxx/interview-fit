@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAdapters } from "../../lib/adapters";
+import { useI18n } from "../../lib/i18n";
 import type { AnalysisResult } from "../../lib/api/contracts";
 import { buildReport, reportFileName, type TryOnReportStatus } from "./buildReport";
 
@@ -15,9 +16,13 @@ type SaveState = { status: "idle" } | { status: "saving" } | { status: "saved" }
 
 export function ReportStep({ result, tryOn, generatedAt, onBack, onStartOver }: ReportStepProps) {
   const { report: exporter } = useAdapters();
+  const { m, locale } = useI18n();
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const date = useMemo(() => new Date(generatedAt), [generatedAt]);
-  const contents = useMemo(() => buildReport({ result, tryOn, generatedAt: date }), [result, tryOn, date]);
+  const contents = useMemo(
+    () => buildReport({ result, tryOn, generatedAt: date, locale }),
+    [result, tryOn, date, locale],
+  );
 
   async function handleSave() {
     setSave({ status: "saving" });
@@ -31,33 +36,33 @@ export function ReportStep({ result, tryOn, generatedAt, onBack, onStartOver }: 
 
   return (
     <div className="step-stack">
-      <p className="hint">Your photo is not included. Saving creates a text file only where you choose.</p>
-      <pre className="report-preview" role="region" tabIndex={0} aria-label="Report preview">
+      <p className="hint">{m.report.hint}</p>
+      <pre className="report-preview" role="region" tabIndex={0} aria-label={m.report.previewLabel}>
         {contents}
       </pre>
       <div className="actions">
         <button type="button" className="button button-primary" onClick={handleSave} disabled={save.status === "saving"}>
-          Save report…
+          {m.report.save}
         </button>
         <button type="button" className="button button-secondary" onClick={onBack}>
-          Back to guidance
+          {m.report.back}
         </button>
         <button type="button" className="button button-text" onClick={onStartOver}>
-          Start over
+          {m.report.startOver}
         </button>
         {save.status === "saved" && (
           <p className="notice" role="status">
-            Report saved.
+            {m.report.saved}
           </p>
         )}
         {save.status === "cancelled" && (
           <p className="status-text" role="status">
-            Save cancelled. Nothing was written.
+            {m.report.cancelled}
           </p>
         )}
         {save.status === "failed" && (
           <p className="notice notice-danger" role="alert">
-            The report could not be saved. Choose another location and try again.
+            {m.report.failed}
           </p>
         )}
       </div>

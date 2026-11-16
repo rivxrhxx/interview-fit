@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from "react";
+import { useI18n } from "../../lib/i18n";
 import { CONSENT_VERSION, createConsentRecord, type ConsentRecord } from "./consent";
 
 interface ConsentGateProps {
@@ -7,6 +8,7 @@ interface ConsentGateProps {
 }
 
 export function ConsentGate({ onAccept, onDecline }: ConsentGateProps) {
+  const { m } = useI18n();
   const [agreed, setAgreed] = useState(false);
   const [showError, setShowError] = useState(false);
   const checkboxRef = useRef<HTMLInputElement>(null);
@@ -22,42 +24,7 @@ export function ConsentGate({ onAccept, onDecline }: ConsentGateProps) {
     onAccept(createConsentRecord());
   }
 
-  const groups: Array<{ id: string; title: string; items: string[] }> = [
-    {
-      id: "consent-what",
-      title: "What is sent",
-      items: [
-        "The photo you just confirmed, re-encoded on this device without location or camera metadata.",
-        "The job description text you saved.",
-        "The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner when you cancel or start over.",
-      ],
-    },
-    {
-      id: "consent-why",
-      title: "Why",
-      items: [
-        "To produce optional, neutral suggestions about lighting, framing, background, and attire context.",
-        "To preview one curated interview attire style if you choose to.",
-      ],
-    },
-    {
-      id: "consent-who",
-      title: "Who receives it",
-      items: [
-        "The Interview Fit backend, operated for this app.",
-        "YouCam (Perfect Corp.), the image-analysis and try-on provider the backend uses on Interview Fit's behalf. Its own retention terms apply to its processing.",
-      ],
-    },
-    {
-      id: "consent-never",
-      title: "What Interview Fit never does",
-      items: [
-        "Diagnose health conditions or score appearance or attractiveness.",
-        "Infer personality, emotion, or protected traits, or predict interview or hiring outcomes.",
-        "Keep your photo in app history. Results are saved only if you export them.",
-      ],
-    },
-  ];
+  const groups = m.consent.groups;
 
   return (
     <form className="step-stack" onSubmit={handleSubmit} noValidate>
@@ -89,24 +56,22 @@ export function ConsentGate({ onAccept, onDecline }: ConsentGateProps) {
             aria-describedby={showError ? errorId : undefined}
             aria-invalid={showError || undefined}
           />
-          <span className="consent-text">
-            I agree to send this photo and job description to Interview Fit and its provider for this analysis.
-          </span>
+          <span className="consent-text">{m.consent.agree}</span>
         </label>
         {showError && (
           <p className="field-error" id={errorId}>
-            Check the box to agree, or choose Not now.
+            {m.consent.error}
           </p>
         )}
-        <p className="meta">Consent version {CONSENT_VERSION}</p>
+        <p className="meta">{m.consent.version(CONSENT_VERSION)}</p>
       </div>
 
       <div className="actions">
         <button type="submit" className="button button-primary">
-          Agree and analyze
+          {m.consent.submit}
         </button>
         <button type="button" className="button button-text" onClick={onDecline}>
-          Not now
+          {m.consent.decline}
         </button>
       </div>
     </form>

@@ -1,4 +1,5 @@
-import type { AnalysisResult, ObservationCategory } from "../../lib/api/contracts";
+import type { AnalysisResult } from "../../lib/api/contracts";
+import { MESSAGES, type Locale } from "../../lib/i18n";
 import { filterGuidance } from "../recommendation";
 
 export type TryOnReportStatus = "created" | "not-created" | "unavailable";
@@ -7,27 +8,9 @@ export interface ReportInput {
   result: AnalysisResult;
   tryOn: TryOnReportStatus;
   generatedAt: Date;
+  /** Language of the report's own headings and notices (defaults to English). */
+  locale?: Locale;
 }
-
-const CATEGORY_LABELS: Record<ObservationCategory, string> = {
-  lighting: "Lighting",
-  framing: "Framing",
-  background: "Background",
-  "image-clarity": "Image clarity",
-  attire: "Attire",
-};
-
-const TRY_ON_STATUS: Record<TryOnReportStatus, string> = {
-  created: "A navy blazer preview was created during this session. It is not included in this report.",
-  "not-created": "No try-on preview was created.",
-  unavailable: "A try-on preview could not be created.",
-};
-
-const PRIVACY_NOTICE = [
-  "This report contains text only. It does not include your photo, the try-on preview, or any image data.",
-  "Interview Fit offers optional, neutral suggestions. It does not assess appearance, infer personal traits, or predict interview outcomes.",
-  "Temporary copies held by the Interview Fit backend are deleted when you start over or when they expire, by default within 15 minutes. The image provider's own retention terms apply to its processing.",
-];
 
 /** Escapes Markdown syntax so untrusted text cannot form images, links, HTML, or headings. */
 export function escapeMarkdown(text: string): string {
@@ -47,33 +30,43 @@ export function reportFileName(date: Date): string {
  * Builds the text report (R7.1). It never embeds the source photo, the try-on
  * preview, or any image data (R7.2), and it applies the shared content policy.
  */
-export function buildReport({ result, tryOn, generatedAt }: ReportInput): string {
+export function buildReport({ result, tryOn, generatedAt, locale = "en" }: ReportInput): string {
+  const m = MESSAGES[locale];
+  const copy = m.report.document;
   const safe = filterGuidance(result);
   const observations = new Map(safe.observations.map((observation) => [observation.id, observation.text]));
-  const lines: string[] = ["# Interview Fit report", "", `Generated: ${formatGenerated(generatedAt)}`, "", "## Job context", ""];
+  const lines: string[] = [
+    `# ${escapeMarkdown(copy.title)}`,
+    "",
+    `${copy.generated}: ${formatGenerated(generatedAt)}`,
+    "",
+    `## ${escapeMarkdown(copy.jobContext)}`,
+    "",
+  ];
 
-  lines.push(escapeMarkdown(safe.jobContext.summary || "No job-context summary is available."), "");
-  for (const cue of safe.jobContext.cues) lines.push(`- ${escapeMarkdown(cue.label)}: “${escapeMarkdown(cue.evidence)}”`);
+  lines.push(escapeMarkdown(safe.jobContext.summary || copy.noSummary), "");
+  for (const cue of safe.jobContext.cues) {
+    const same = cue.label.replace(/\s/g, "").toLowerCase() === cue.evidence.replace(/\s/g, "").toLowerCase();
+    lines.push(same ? `- ${escapeMarkdown(cue.label)}` : `- ${escapeMarkdown(cue.label)}: “${escapeMarkdown(cue.evidence)}”`);
+  }
   if (safe.jobContext.cues.length > 0) lines.push("");
 
-  lines.push("## Presentation guidance", "");
-  lines.push(escapeMarkdown("These suggestions are optional."), "");
-  if (safe.recommendations.length === 0) {
-    lines.push(escapeMarkdown("No adjustments were suggested for this photo and job description."), "");
-  }
+  lines.push(`## ${escapeMarkdown(copy.guidance)}`, "");
+  lines.push(escapeMarkdown(copy.optional), "");
+  if (safe.recommendations.length === 0) lines.push(escapeMarkdown(copy.noRecommendations), "");
   for (const rec of safe.recommendations) {
-    const noticed = (rec.observationId && observations.get(rec.observationId)) || "From the job description";
+    const noticed = (rec.observationId && observations.get(rec.observationId)) || m.guidance.fromJob;
     lines.push(
-      `### ${escapeMarkdown(CATEGORY_LABELS[rec.category])}`,
+      `### ${escapeMarkdown(m.categories[rec.category])}`,
       "",
-      `- What we noticed: ${escapeMarkdown(noticed)}`,
-      `- Optional adjustment: ${escapeMarkdown(rec.adjustment)}`,
-      `- Why: ${escapeMarkdown(rec.rationale)}`,
+      `- ${m.guidance.noticed}: ${escapeMarkdown(noticed)}`,
+      `- ${m.guidance.adjustment}: ${escapeMarkdown(rec.adjustment)}`,
+      `- ${m.guidance.why}: ${escapeMarkdown(rec.rationale)}`,
       "",
     );
   }
 
-  lines.push(`## ${escapeMarkdown("Virtual try-on")}`, "", `Status: ${escapeMarkdown(TRY_ON_STATUS[tryOn])}`, "");
-  lines.push("## Privacy", "", ...PRIVACY_NOTICE.flatMap((sentence) => [escapeMarkdown(sentence), ""]));
+  lines.push(`## ${escapeMarkdown(copy.tryOn)}`, "", `${copy.status}: ${escapeMarkdown(copy.tryOnStatus[tryOn])}`, "");
+  lines.push(`## ${escapeMarkdown(copy.privacy)}`, "", ...copy.privacyLines.flatMap((sentence) => [escapeMarkdown(sentence), ""]));
   return `${lines.join("\n").trimEnd()}\n`;
 }

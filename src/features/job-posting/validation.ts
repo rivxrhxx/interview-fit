@@ -27,18 +27,3 @@ export function validateJobDescription(raw: string): JobDescriptionResult {
   if (check.reason === "empty") return { ok: false, error: { code: "JOB_DESCRIPTION_EMPTY" } };
   return { ok: false, error: { code: "JOB_DESCRIPTION_TOO_LONG", maxLength: check.maxLength, length: check.length } };
 }
-
-const numberFormat = new Intl.NumberFormat("en-US");
-
-export function formatCount(value: number): string {
-  return numberFormat.format(value);
-}
-
-export function jobDescriptionErrorMessage(error: JobDescriptionError): string {
-  switch (error.code) {
-    case "JOB_DESCRIPTION_EMPTY":
-      return "Enter a job description to continue.";
-    case "JOB_DESCRIPTION_TOO_LONG":
-      return `Shorten the job description to ${formatCount(error.maxLength)} characters or fewer (currently ${formatCount(error.length)}).`;
-  }
-}

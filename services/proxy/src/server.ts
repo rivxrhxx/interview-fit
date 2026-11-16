@@ -9,6 +9,7 @@ import {
   TRY_ON_JOB_ID_PATTERN,
   TRY_ON_STYLES,
   checkJobDescription,
+  isLocale,
   type AnalysisJob,
   type AnalysisJobId,
   type ErrorCode,
@@ -246,7 +247,9 @@ export function createProxy(deps: ProxyDeps): Proxy {
       throw new HttpError("PROCESSING_UNAVAILABLE");
     }
 
-    const record = jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info });
+    const requestedLocale = form.get(ANALYSIS_REQUEST_FIELDS.locale);
+    const locale = isLocale(requestedLocale) ? requestedLocale : "en";
+    const record = jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info, locale });
     if (key) idempotency.set(key, record.id);
     if (key && tombstones.has(key)) {
       // The client already cancelled this upload: stop before any provider call.

@@ -1,7 +1,6 @@
-import { ERROR_MESSAGES } from "../../lib/api/contracts";
+import type { Messages } from "../../lib/i18n";
 import type { ImageErrorCode } from "../../lib/validation/image";
 
-export function imageErrorMessage(code: ImageErrorCode): string {
-  if (code === "INTERNAL_ERROR") return "The photo could not be prepared. Try again or choose a different image.";
-  return ERROR_MESSAGES[code];
+export function imageErrorMessage(m: Messages, code: ImageErrorCode): string {
+  return code === "INTERNAL_ERROR" ? m.photo.prepareFailed : m.errors[code];
 }

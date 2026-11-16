@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { useAdapters } from "../../lib/adapters";
+import { useI18n, type Messages } from "../../lib/i18n";
 import { CameraIcon, PhotoIcon } from "../../lib/ui/icons";
 import { CameraCapture, type CameraCloseReason } from "./CameraCapture";
 import { imageErrorMessage } from "./imageErrors";
@@ -16,18 +17,22 @@ type PickerState =
   | { status: "preparing" }
   | { status: "error"; message: string };
 
-const CAMERA_MESSAGES: Record<Exclude<CameraCloseReason, "cancelled">, PickerState> = {
-  backgrounded: {
-    status: "idle",
-    notice: "The camera was turned off because Interview Fit moved to the background.",
-  },
-  denied: { status: "error", message: "Camera access was not allowed. You can choose a photo file instead." },
-  unavailable: { status: "error", message: "No camera is available right now. You can choose a photo file instead." },
-  failed: { status: "error", message: "The camera photo could not be captured. Try again or choose a photo file." },
-};
+function cameraState(m: Messages, reason: Exclude<CameraCloseReason, "cancelled">): PickerState {
+  switch (reason) {
+    case "backgrounded":
+      return { status: "idle", notice: m.photo.backgrounded };
+    case "denied":
+      return { status: "error", message: m.photo.denied };
+    case "unavailable":
+      return { status: "error", message: m.photo.unavailable };
+    case "failed":
+      return { status: "error", message: m.photo.captureFailed };
+  }
+}
 
 export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
   const { image: imageAdapter } = useAdapters();
+  const { m } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<PickerState>({ status: "idle" });
   const mounted = useRef(true);
@@ -47,7 +52,7 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
       setState({ status: "idle" });
       onImageReady(result.image);
     } else {
-      setState({ status: "error", message: imageErrorMessage(result.code) });
+      setState({ status: "error", message: imageErrorMessage(m, result.code) });
     }
   }
 
@@ -59,7 +64,7 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
   }
 
   function handleCameraClosed(reason: CameraCloseReason) {
-    setState(reason === "cancelled" ? { status: "idle" } : CAMERA_MESSAGES[reason]);
+    setState(reason === "cancelled" ? { status: "idle" } : cameraState(m, reason));
   }
 
   const preparing = state.status === "preparing";
@@ -68,12 +73,9 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
   return (
     <section className="section" aria-labelledby="photo-picker-heading">
       <h2 id="photo-picker-heading" className="section-title">
-        Photo
+        {m.photo.title}
       </h2>
-      <p className="hint">
-        Use a JPEG or PNG up to 10 MB and 16 megapixels. Location and camera metadata are removed on this device.
-        Nothing is uploaded until you review and agree on the consent step.
-      </p>
+      <p className="hint">{m.photo.hint}</p>
       {state.status === "camera" ? (
         <CameraCapture onCaptured={(frame) => void prepare(frame, "camera")} onClosed={handleCameraClosed} />
       ) : (
@@ -88,10 +90,10 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
           >
             <PhotoIcon className="option-icon" />
             <span id={ids.choose} className="option-title">
-              Choose a photo
+              {m.photo.choose}
             </span>
             <span id={ids.chooseDetail} className="option-detail">
-              A JPEG or PNG from this computer
+              {m.photo.chooseDetail}
             </span>
           </button>
           <button
@@ -104,10 +106,10 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
           >
             <CameraIcon className="option-icon" />
             <span id={ids.camera} className="option-title">
-              Use camera
+              {m.photo.camera}
             </span>
             <span id={ids.cameraDetail} className="option-detail">
-              Take one photo now
+              {m.photo.cameraDetail}
             </span>
           </button>
         </div>
@@ -116,14 +118,14 @@ export function PhotoPicker({ onImageReady }: PhotoPickerProps) {
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png"
-        aria-label="Photo file"
+        aria-label={m.photo.fileLabel}
         tabIndex={-1}
         hidden
         onChange={handleFileChange}
       />
       {preparing && (
         <p className="status-text" role="status">
-          Checking your photo…
+          {m.photo.checking}
         </p>
       )}
       {state.status === "idle" && state.notice && (

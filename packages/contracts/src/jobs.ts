@@ -1,4 +1,5 @@
 import type { ApiError } from "./errors.ts";
+import type { Locale } from "./locale.ts";
 
 /** Opaque Interview Fit identifiers. They never embed provider task or file IDs. */
 export type AnalysisJobId = string & { readonly __brand: "AnalysisJobId" };
@@ -51,6 +52,8 @@ export interface Recommendation {
 
 export interface AnalysisResult {
   generatedAt: string;
+  /** Language of every generated string in this result. */
+  locale: Locale;
   jobContext: JobContext;
   observations: Observation[];
   recommendations: Recommendation[];
@@ -71,6 +74,8 @@ export const ANALYSIS_REQUEST_FIELDS = {
   consentVersion: "consentVersion",
   jobDescription: "jobDescription",
   image: "image",
+  /** Optional; "en" when absent. Selects the language of generated guidance. */
+  locale: "locale",
 } as const;
 
 /** The single curated try-on style in the MVP (R6.1). */

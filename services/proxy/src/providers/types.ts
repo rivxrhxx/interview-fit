@@ -1,4 +1,4 @@
-import type { Observation, TryOnStyleId } from "../../../../packages/contracts/src/index.ts";
+import type { Locale, Observation, TryOnStyleId } from "../../../../packages/contracts/src/index.ts";
 import type { ImageInfo } from "../imageInspect.ts";
 
 export interface ProviderImage extends ImageInfo {
@@ -32,7 +32,8 @@ export class ProviderError extends Error {
  * neutral observations; vendor IDs, URLs, and messages stay inside the adapter.
  */
 export interface AnalysisProvider {
-  analyze(image: ProviderImage, signal: AbortSignal): Promise<Observation[]>;
+  /** `locale` selects the language of observation text (default "en"). */
+  analyze(image: ProviderImage, signal: AbortSignal, locale?: Locale): Promise<Observation[]>;
 }
 
 export interface TryOnResult {

@@ -1,4 +1,5 @@
 import { ERROR_MESSAGES, ERROR_POLICY, isErrorCode, type ApiError, type ApiErrorBody } from "./errors.ts";
+import { SUPPORTED_LOCALES } from "./locale.ts";
 import {
   ANALYSIS_JOB_ID_PATTERN,
   JOB_STATES,
@@ -140,6 +141,7 @@ export function parseAnalysisResult(value: unknown, path = "$.result"): Analysis
   const context = record(source.jobContext, `${path}.jobContext`);
   const result: AnalysisResult = {
     generatedAt: timestamp(source.generatedAt, `${path}.generatedAt`),
+    locale: source.locale === undefined ? "en" : oneOf(source.locale, SUPPORTED_LOCALES, `${path}.locale`),
     jobContext: {
       summary: string(context.summary, `${path}.jobContext.summary`, MAX_TEXT),
       cues: list(context.cues, `${path}.jobContext.cues`, parseCue),

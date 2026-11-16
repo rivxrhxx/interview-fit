@@ -5,6 +5,7 @@ export * from "./consent.ts";
 export * from "./errors.ts";
 export * from "./jobs.ts";
 export * from "./limits.ts";
+export * from "./locale.ts";
 export * from "./parse.ts";
 export * from "./policy.ts";
 export * from "./routes.ts";

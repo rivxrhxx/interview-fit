@@ -1,4 +1,4 @@
-import type { Observation } from "../../../../packages/contracts/src/index.ts";
+import type { Locale, Observation } from "../../../../packages/contracts/src/index.ts";
 import { encodePng } from "../png.ts";
 import { captureBasics } from "./captureBasics.ts";
 import { ProviderError, type AnalysisProvider, type ProviderImage, type TryOnProvider } from "./types.ts";
@@ -21,14 +21,17 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** Deterministic observations for demos and tests (R9.2). */
-export function simulatedObservations(image: ProviderImage): Observation[] {
+export function simulatedObservations(image: ProviderImage, locale: Locale = "en"): Observation[] {
   return [
-    ...captureBasics(image),
+    ...captureBasics(image, locale),
     {
       id: "obs_lighting",
       category: "lighting",
       assessment: "adjustable",
-      text: "Front lighting could not be confirmed from this photo.",
+      text:
+        locale === "ko"
+          ? "이 사진에서는 정면 조명을 확인할 수 없었어요."
+          : "Front lighting could not be confirmed from this photo.",
     },
   ];
 }
@@ -36,7 +39,7 @@ export function simulatedObservations(image: ProviderImage): Observation[] {
 /** Local stand-in for the image provider. It never contacts a network service. */
 export function createSimulatorProvider(options: { delayMs: number; scenario: SimulatorScenario }): AnalysisProvider {
   return {
-    async analyze(image, signal) {
+    async analyze(image, signal, locale = "en") {
       if (options.scenario === "timeout") {
         await new Promise<never>((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
       }
@@ -49,7 +52,7 @@ export function createSimulatorProvider(options: { delayMs: number; scenario: Si
         case "malformed":
           return [{ unexpected: true }] as unknown as Observation[];
         default:
-          return simulatedObservations(image);
+          return simulatedObservations(image, locale);
       }
     },
   };
