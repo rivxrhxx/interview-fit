@@ -7,6 +7,8 @@ import type { AnalysisJobRecord } from "./store.ts";
 
 export interface TryOnJobRecord {
   id: TryOnJobId;
+  /** The consented analysis job whose image was used; its deletion cascades here. */
+  analysisJobId: string;
   styleId: TryOnStyleId;
   state: JobState;
   createdAt: number;
@@ -22,6 +24,9 @@ export interface TryOnJobs {
   create(analysis: AnalysisJobRecord, styleId: TryOnStyleId): TryOnJobRecord;
   get(id: string): TryOnJobRecord | undefined;
   cancel(id: string): TryOnJobRecord | undefined;
+  /** Removes every try-on (and its result) made from an analysis job. */
+  removeForAnalysis(analysisJobId: string): void;
+  retainedBytes(): number;
   sweep(): void;
   clear(): void;
 }
@@ -88,6 +93,7 @@ export function createTryOnJobs(options: {
       const createdAt = now();
       const record: TryOnJobRecord = {
         id: newTryOnJobId() as TryOnJobId,
+        analysisJobId: analysis.id,
         styleId,
         state: "queued",
         createdAt,
@@ -128,6 +134,14 @@ export function createTryOnJobs(options: {
         record.expiresAt = Math.min(record.expiresAt, now() + options.terminalRetentionMs);
       }
       return record;
+    },
+
+    removeForAnalysis(analysisJobId) {
+      for (const record of [...jobs.values()]) if (record.analysisJobId === analysisJobId) remove(record);
+    },
+
+    retainedBytes() {
+      return [...jobs.values()].reduce((sum, record) => sum + (record.result?.bytes.length ?? 0), 0);
     },
 
     sweep() {

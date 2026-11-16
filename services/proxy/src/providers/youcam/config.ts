@@ -6,6 +6,11 @@ export interface YouCamConfig {
   pollIntervalMs: number;
   /** Consecutive failed status reads tolerated before the job fails. */
   maxPollFailures: number;
+  /**
+   * Optional allowlist of storage host suffixes for pre-signed upload and result
+   * URLs returned by the provider. When unset, any https host is accepted.
+   */
+  storageHosts: string[] | null;
   tryOn: {
     /** Operator-provided, licensed garment image for the curated style. Never committed to the repository. */
     refFileUrl: string | null;
@@ -54,6 +59,9 @@ export function loadYouCamConfig(env: Record<string, string | undefined>): YouCa
     baseUrl: base.origin,
     pollIntervalMs,
     maxPollFailures: 3,
+    storageHosts: env.YOUCAM_STORAGE_HOSTS
+      ? env.YOUCAM_STORAGE_HOSTS.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean)
+      : null,
     tryOn: { refFileUrl: httpsUrl(env.YOUCAM_TRYON_REF_FILE_URL, "YOUCAM_TRYON_REF_FILE_URL"), garmentCategory },
   };
 }

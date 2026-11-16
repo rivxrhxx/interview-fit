@@ -112,3 +112,25 @@ describe("YouCam try-on adapter", () => {
     ).toThrow(/YOUCAM_TRYON_REF_FILE_URL must use https/);
   });
 });
+
+describe("bounded provider downloads (review finding 5)", () => {
+  it("rejects a result without Content-Length that grows past the size cap", async () => {
+    const huge = new Uint8Array(10 * 1024 * 1024 + 1);
+    huge.set([0xff, 0xd8, 0xff]);
+    const { provider } = setup({ resultReply: { status: 200, bytes: huge } });
+
+    await expect(run(provider)).rejects.toMatchObject({ kind: "malformed-response" });
+  });
+
+  it("enforces the optional storage host allowlist", async () => {
+    const { provider } = setup({}, { YOUCAM_TRYON_REF_FILE_URL: FAKE_REF_URL, YOUCAM_STORAGE_HOSTS: "results.example-cdn.test" });
+
+    await expect(run(provider)).rejects.toMatchObject({ kind: "malformed-response" });
+  });
+
+  it("accepts a result from an allowlisted host suffix", async () => {
+    const { provider } = setup({}, { YOUCAM_TRYON_REF_FILE_URL: FAKE_REF_URL, YOUCAM_STORAGE_HOSTS: "youcam-storage.test" });
+
+    await expect(run(provider)).resolves.toMatchObject({ mimeType: "image/jpeg" });
+  });
+});

@@ -47,11 +47,15 @@ pub async fn save_report(
             status: SaveStatus::Cancelled,
         });
     };
-    let path =
-        report_export::with_markdown_extension(picked.into_path().map_err(|_| save_failed())?);
-    tauri::async_runtime::spawn_blocking(move || report_export::write_report(&path, &contents))
-        .await
-        .map_err(|_| save_failed())??;
+    // If `.md` had to be appended, the final path was never confirmed in the dialog,
+    // so it must not overwrite an existing file.
+    let (path, renamed) =
+        report_export::markdown_destination(picked.into_path().map_err(|_| save_failed())?);
+    tauri::async_runtime::spawn_blocking(move || {
+        report_export::write_report_to(&path, &contents, renamed)
+    })
+    .await
+    .map_err(|_| save_failed())??;
     Ok(SaveOutcome {
         status: SaveStatus::Saved,
     })

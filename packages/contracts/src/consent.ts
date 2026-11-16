@@ -3,4 +3,5 @@
  * or to whom requires a new version; the backend rejects any other version
  * with CONSENT_REQUIRED.
  */
-export const CURRENT_CONSENT_VERSION = "2026-11-16.v1";
+// v2 (2026-11-16): states how long the backend keeps the temporary copy.
+export const CURRENT_CONSENT_VERSION = "2026-11-16.v2";

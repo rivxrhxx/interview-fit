@@ -79,6 +79,8 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
   }
 
   async function process(record: AnalysisJobRecord) {
+    // Cancelled before processing started (for example, cancel-by-key during upload).
+    if (record.state !== "queued") return;
     const controller = new AbortController();
     record.abort = controller;
     record.state = "processing";

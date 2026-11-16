@@ -30,6 +30,10 @@ export function ConsentGate({ onAccept, onDecline }: ConsentGateProps) {
           <ul>
             <li>The photo you just confirmed, re-encoded on this device without location or camera metadata.</li>
             <li>The job description text you saved.</li>
+            <li>
+              The backend keeps a temporary copy for up to 15 minutes so you can preview attire, and deletes it sooner
+              when you cancel or start over.
+            </li>
           </ul>
         </section>
         <section aria-labelledby="consent-why">

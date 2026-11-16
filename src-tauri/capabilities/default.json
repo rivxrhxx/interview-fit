@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Main window: only the two app commands the UI uses. No core plugin APIs (path, events, window, menu, tray) are exposed.",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-prepare-image", "allow-save-report"]
+  "permissions": ["allow-prepare-image", "allow-save-report"]
 }

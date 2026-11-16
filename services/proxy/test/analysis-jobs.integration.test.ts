@@ -250,7 +250,7 @@ describe("transport hygiene", () => {
     await expectError(await fetch(`${proxy.baseUrl}/v1/unknown`), 404, "JOB_NOT_FOUND");
     const wrongMethod = await fetch(`${proxy.baseUrl}/v1/analysis-jobs`, { method: "PUT" });
     expect(wrongMethod.status).toBe(405);
-    expect(wrongMethod.headers.get("allow")).toBe("POST, OPTIONS");
+    expect(wrongMethod.headers.get("allow")).toBe("POST, DELETE, OPTIONS");
   });
 });
 

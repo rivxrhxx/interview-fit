@@ -12,6 +12,10 @@ export interface ProxyConfig {
   providerTimeoutMs: number;
   rateLimitPerMinute: number;
   sweepIntervalMs: number;
+  /** Upper bound on stored jobs; new uploads get PROCESSING_UNAVAILABLE beyond it. */
+  maxLiveJobs: number;
+  /** Upper bound on image bytes held in memory across all jobs and try-on results. */
+  maxRetainedBytes: number;
   provider: "simulator" | "youcam";
   simulator: { delayMs: number; scenario: SimulatorScenario };
 }
@@ -40,7 +44,10 @@ export function loadConfig(env: Record<string, string | undefined>): ProxyConfig
     terminalRetentionMs: integer(env.TERMINAL_RETENTION_MS, 60_000, 0),
     providerTimeoutMs: integer(env.PROVIDER_TIMEOUT_MS, 45_000, 10),
     rateLimitPerMinute: integer(env.RATE_LIMIT_PER_MINUTE, 10, 1),
-    sweepIntervalMs: integer(env.SWEEP_INTERVAL_MS, 30_000, 0),
+    // At least once per second-scale interval, so expired images never wait for a lookup.
+    sweepIntervalMs: integer(env.SWEEP_INTERVAL_MS, 30_000, 1_000),
+    maxLiveJobs: integer(env.MAX_LIVE_JOBS, 50, 1),
+    maxRetainedBytes: integer(env.MAX_RETAINED_BYTES, 256 * 1024 * 1024, 1),
     provider,
     simulator: { delayMs: integer(env.SIMULATOR_DELAY_MS, 1_200, 0), scenario },
   };

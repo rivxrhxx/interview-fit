@@ -74,21 +74,33 @@ pub fn suggested_file_name(raw: &str) -> String {
     }
 }
 
-/// Keeps the user's chosen location but guarantees a Markdown extension.
-pub fn with_markdown_extension(path: PathBuf) -> PathBuf {
+/// Keeps the user's chosen location but guarantees a Markdown extension. The flag
+/// is true when the name had to change, i.e. the final path was never confirmed.
+pub fn markdown_destination(path: PathBuf) -> (PathBuf, bool) {
     match path.extension().and_then(|extension| extension.to_str()) {
-        Some(extension) if extension.eq_ignore_ascii_case("md") => path,
+        Some(extension) if extension.eq_ignore_ascii_case("md") => (path, false),
         Some(_) => {
             let mut name = path.file_name().unwrap_or_default().to_os_string();
             name.push(".md");
-            path.with_file_name(name)
+            (path.with_file_name(name), true)
         }
-        None => path.with_extension("md"),
+        None => (path.with_extension("md"), true),
     }
 }
 
-pub fn write_report(path: &Path, contents: &str) -> Result<(), ReportError> {
-    std::fs::write(path, contents).map_err(|_| ReportError::new(ReportErrorCode::ReportSaveFailed))
+/// Writes the report. A path the user did not confirm (`must_be_new`) is never
+/// overwritten; the dialog's own overwrite prompt covers confirmed paths.
+pub fn write_report_to(path: &Path, contents: &str, must_be_new: bool) -> Result<(), ReportError> {
+    use std::io::Write;
+    let failed = |_| ReportError::new(ReportErrorCode::ReportSaveFailed);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(!must_be_new)
+        .create_new(must_be_new)
+        .truncate(!must_be_new)
+        .open(path)
+        .map_err(failed)?;
+    file.write_all(contents.as_bytes()).map_err(failed)
 }
 
 #[cfg(test)]
@@ -96,6 +108,14 @@ mod tests {
     // Task 9.1 — explicit report export: input validation and safe writes (R7.2, tauri-rust steering).
     use super::*;
     use std::path::PathBuf;
+
+    fn with_markdown_extension(path: PathBuf) -> PathBuf {
+        markdown_destination(path).0
+    }
+
+    fn write_report(path: &Path, contents: &str) -> Result<(), ReportError> {
+        write_report_to(path, contents, false)
+    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir =
@@ -185,6 +205,36 @@ mod tests {
         write_report(&path, "# Report\n").unwrap();
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Report\n");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn never_overwrites_a_file_the_dialog_did_not_confirm() {
+        let dir = temp_dir("no-overwrite");
+        let chosen = dir.join("notes");
+        let existing = dir.join("notes.md");
+        std::fs::write(&existing, "keep me").unwrap();
+
+        let (path, renamed) = markdown_destination(chosen);
+        assert!(renamed);
+        let error = write_report_to(&path, "# Report\n", renamed).unwrap_err();
+
+        assert_eq!(error.code, ReportErrorCode::ReportSaveFailed);
+        assert_eq!(std::fs::read_to_string(&existing).unwrap(), "keep me");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn overwrites_only_the_exact_path_the_user_confirmed() {
+        let dir = temp_dir("confirmed");
+        let chosen = dir.join("report.md");
+        std::fs::write(&chosen, "old").unwrap();
+
+        let (path, renamed) = markdown_destination(chosen.clone());
+        assert!(!renamed);
+        write_report_to(&path, "# New\n", renamed).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&chosen).unwrap(), "# New\n");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

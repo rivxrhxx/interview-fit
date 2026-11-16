@@ -30,6 +30,12 @@ describe("ConsentGate", () => {
     expect(screen.getByText(`Consent version ${CONSENT_VERSION}`)).toBeInTheDocument();
   });
 
+  it("states how long the backend keeps the temporary copy", () => {
+    render(<ConsentGate onAccept={() => {}} onDecline={() => {}} />);
+
+    expect(screen.getByText(/keeps a temporary copy for up to 15 minutes/)).toBeInTheDocument();
+  });
+
   it("does not accept until the box is checked", async () => {
     const onAccept = vi.fn();
     const user = userEvent.setup();

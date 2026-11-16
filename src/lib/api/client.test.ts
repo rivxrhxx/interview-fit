@@ -7,7 +7,7 @@ import rateLimited from "../../../packages/contracts/fixtures/error.rate-limited
 import tryOnSucceeded from "../../../packages/contracts/fixtures/try-on-job.succeeded.json";
 import { ApiRequestError, createHttpApiClient } from "./client";
 import { resolveApiBaseUrl } from "./config";
-import type { AnalysisJobId, TryOnJobId } from "./contracts";
+import { CURRENT_CONSENT_VERSION, type AnalysisJobId, type TryOnJobId } from "./contracts";
 
 const BASE = "http://localhost:8080";
 const JOB_ID = queued.id as AnalysisJobId;
@@ -26,7 +26,7 @@ describe("createHttpApiClient", () => {
     const image = new Blob(["jpeg-bytes"], { type: "image/jpeg" });
 
     const job = await clientWith(fetchMock).createAnalysisJob({
-      consentVersion: "2026-11-16.v1",
+      consentVersion: CURRENT_CONSENT_VERSION,
       jobDescription: "Analyst",
       image,
     });
@@ -36,7 +36,7 @@ describe("createHttpApiClient", () => {
     expect(url).toBe(`${BASE}/v1/analysis-jobs`);
     expect(init).toMatchObject({ method: "POST", credentials: "omit", redirect: "error", cache: "no-store" });
     const form = init.body as FormData;
-    expect(form.get("consentVersion")).toBe("2026-11-16.v1");
+    expect(form.get("consentVersion")).toBe(CURRENT_CONSENT_VERSION);
     expect(form.get("jobDescription")).toBe("Analyst");
     expect(form.get("image")).toBeInstanceOf(Blob);
   });
@@ -53,6 +53,31 @@ describe("createHttpApiClient", () => {
     const keys = fetchMock.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers).get("Idempotency-Key"));
     expect(keys[0]).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
     expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("cancels by idempotency key when the upload is aborted before the job ID arrives", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        controller.abort();
+        throw new DOMException("aborted", "AbortError");
+      }
+      return new Response(null, { status: 204 });
+    });
+
+    await expect(
+      clientWith(fetchMock as unknown as typeof fetch).createAnalysisJob(
+        { consentVersion: "v", jobDescription: "Analyst", image: new Blob(["x"]) },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    const [postUrl, postInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [deleteUrl, deleteInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(postUrl).toBe(`${BASE}/v1/analysis-jobs`);
+    expect(deleteUrl).toBe(`${BASE}/v1/analysis-jobs`);
+    expect(deleteInit.method).toBe("DELETE");
+    expect(new Headers(deleteInit.headers).get("Idempotency-Key")).toBe(new Headers(postInit.headers).get("Idempotency-Key"));
   });
 
   it("does not retry job creation after an HTTP error response", async () => {
@@ -163,7 +188,11 @@ describe("resolveApiBaseUrl", () => {
     expect(resolveApiBaseUrl("https://api.interview-fit.example/")).toBe("https://api.interview-fit.example");
   });
 
-  it.each(["javascript:alert(1)", "file:///etc/passwd", "not a url", "https://user:pass@api.example"])(
+  it.each(["http://127.0.0.1:8080", "http://localhost:8080", "http://[::1]:8080"])("allows plain http for loopback %s", (value) => {
+    expect(resolveApiBaseUrl(value)).toBe(new URL(value).origin);
+  });
+
+  it.each(["javascript:alert(1)", "file:///etc/passwd", "not a url", "https://user:pass@api.example", "http://api.example.com"])(
     "rejects %s",
     (value) => {
       expect(() => resolveApiBaseUrl(value)).toThrow();
