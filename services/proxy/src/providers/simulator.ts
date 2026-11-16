@@ -74,13 +74,26 @@ type Shape = (dx: number, dy: number, r: number) => boolean;
 
 /** Hair silhouettes per curated style, relative to the head center and radius. */
 const HAIR_SHAPES: Record<TryOnStyleId, Shape> = {
-  "sleek-middle-part": (dx, dy, r) => (dy < -0.15 * r && dx * dx + dy * dy < 1.1 * r * r) || (Math.abs(dx) > 0.75 * r && Math.abs(dx) < 1.15 * r && dy < 1.9 * r),
-  "neat-updo": (dx, dy, r) => (dy < -0.25 * r && dx * dx + dy * dy < 1.08 * r * r) || dx * dx + (dy + 1.25 * r) ** 2 < 0.2 * r * r,
+  // Long styles: a cap over the crown plus side lengths that start at the temples.
+  "sleek-middle-part": (dx, dy, r) => cap(dx, dy, r, -0.15) || side(dx, dy, r, 0.72, 1.12, 1.7),
+  "neat-updo": (dx, dy, r) => cap(dx, dy, r, -0.25) || dx * dx + (dy + 1.2 * r) ** 2 < 0.16 * r * r,
   "side-swept-cut": (dx, dy, r) => dy < -0.2 * r + dx * 0.35 && dx * dx + dy * dy < 1.1 * r * r,
-  "side-part-straight": (dx, dy, r) => (dy < -0.1 * r - dx * 0.2 && dx * dx + dy * dy < 1.1 * r * r) || (dx < -0.7 * r && dx > -1.2 * r && dy < 2 * r) || (dx > 0.75 * r && dx < 1.12 * r && dy < 1.6 * r),
-  "short-bob": (dx, dy, r) => (dy < -0.2 * r && dx * dx + dy * dy < 1.15 * r * r) || (Math.abs(dx) > 0.72 * r && Math.abs(dx) < 1.18 * r && dy < 0.85 * r),
-  "textured-comma": (dx, dy, r) => dy < -0.35 * r + Math.abs(Math.sin(dx / (0.18 * r))) * 0.12 * r && dx * dx + dy * dy < 1.08 * r * r,
+  "side-part-straight": (dx, dy, r) =>
+    (dy < -0.1 * r - dx * 0.2 && dx * dx + dy * dy < 1.12 * r * r) || side(dx, dy, r, 0.72, 1.14, 1.8),
+  "short-bob": (dx, dy, r) => cap(dx, dy, r, -0.2) || side(dx, dy, r, 0.72, 1.15, 0.8),
+  "textured-comma": (dx, dy, r) =>
+    dy < -0.35 * r + Math.abs(Math.sin(dx / (0.18 * r))) * 0.12 * r && dx * dx + dy * dy < 1.08 * r * r,
 };
+
+function cap(dx: number, dy: number, r: number, below: number): boolean {
+  return dy < below * r && dx * dx + dy * dy < 1.12 * r * r;
+}
+
+/** Hair falling at both sides of the face, from the temples down to `bottom` (in head radii). */
+function side(dx: number, dy: number, r: number, inner: number, outer: number, bottom: number): boolean {
+  const x = Math.abs(dx);
+  return x > inner * r && x < outer * r && dy > -0.55 * r && dy < bottom * r;
+}
 
 /**
  * Draws an illustrated head-and-shoulders figure with the chosen hairstyle (no user

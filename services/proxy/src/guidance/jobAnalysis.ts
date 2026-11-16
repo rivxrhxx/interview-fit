@@ -98,8 +98,8 @@ const ATMOSPHERES: readonly CatalogEntry[] = [
     id: "relaxed",
     label: { en: "Relaxed and startup-like", ko: "자유롭고 수평적인 분위기" },
     patterns: [
-      /\b(start-?ups?|early-stage|casual|relaxed|laid-back|flat (?:organization|structure|hierarchy)|flexible (?:hours|culture))\b/i,
-      /(스타트업|수평적|자율적|캐주얼|유연한|자유로운|편안한)/,
+      /\b(start-?ups?|early-stage|(?<!(?:business|smart)[- ])casual|relaxed|laid-back|flat (?:organization|structure|hierarchy)|flexible (?:hours|culture))\b/i,
+      /(스타트업|수평적|자율적|(?<!(?:비즈니스|스마트)\s*)캐주얼|유연한|자유로운|편안한)/,
     ],
     formality: "casual",
   },
