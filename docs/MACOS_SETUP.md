@@ -8,7 +8,7 @@
 xcode-select --install
 ```
 
-2. Install Node.js 22 LTS or later with Homebrew:
+2. Install Node.js 22.18 LTS or later with Homebrew (the backend runs TypeScript through Node's built-in type stripping):
 
 ```bash
 brew install node
@@ -26,13 +26,19 @@ source "$HOME/.cargo/env"
 ## Run Interview Fit
 
 ```bash
-tar -xzf Interview-Fit-harness.tar.gz
-cd Interview-Fit
-npm install
-npm run verify:harness
-npm run build
-npm run tauri dev
+git clone https://github.com/rivxrhxx/interview-fit.git
+cd interview-fit
+npm ci
+npm run verify:fast
+npm run proxy            # terminal 1: backend with the deterministic simulator
+npm run tauri dev        # terminal 2: desktop app
 ```
+
+The first `tauri dev` or `tauri build` compiles the Rust dependencies and takes several minutes.
+
+Choosing **Use camera** triggers the macOS camera permission prompt. The usage text comes from `src-tauri/Info.plist`. If access is denied, the app keeps file selection available. To reset the decision, run `tccutil reset Camera com.interviewfit.desktop`.
+
+`npm run tauri build` writes the installable bundle to `src-tauri/target/release/bundle/` (`macos/Interview Fit.app` and `dmg/`). The bundle is unsigned. For distribution outside your own machine, sign and notarize it with an Apple Developer ID, and add the camera entitlement when enabling the hardened runtime.
 
 ## Start with Kiro
 

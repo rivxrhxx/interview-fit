@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "proxy": "node --experimental-strip-types --disable-warning=ExperimentalWarning services/proxy/src/main.ts",
+    "demo:photo": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/generate-demo-photo.ts",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json && tsc -p tsconfig.integration.json",
     "test": "vitest run",
@@ -17,7 +18,8 @@
     "test:proxy": "vitest run services/proxy",
     "preview": "vite preview",
     "verify:harness": "node scripts/verify-harness.mjs",
-    "verify:fast": "npm run verify:harness && npm run typecheck && npm run test",
+    "verify:secrets": "node scripts/scan-repo.mjs",
+    "verify:fast": "npm run verify:harness && npm run verify:secrets && npm run typecheck && npm run test",
     "verify:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "verify": "npm run verify:fast && npm run build && npm run verify:rust",
     "tauri": "tauri"

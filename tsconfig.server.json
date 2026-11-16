@@ -22,7 +22,8 @@
   },
   "include": [
     "packages",
-    "services"
+    "services",
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "services/proxy/test/desktop-client.integration.test.ts"

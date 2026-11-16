@@ -37,3 +37,6 @@ local-reports
 
 # Local agent orchestration state
 .omc/
+
+# Generated synthetic demo assets (npm run demo:photo)
+demo-assets/
