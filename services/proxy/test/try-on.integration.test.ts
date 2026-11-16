@@ -4,6 +4,7 @@
 // cancellation, provider failure mapping, and provider-detail hiding.
 import { afterEach, describe, expect, it } from "vitest";
 import { parseAnalysisJob, parseApiErrorBody, parseTryOnJob, type TryOnJob } from "../../../packages/contracts/src/index.ts";
+import { stripImageMetadata } from "../src/imageInspect.ts";
 import { createSimulatorTryOnProvider } from "../src/providers/simulator.ts";
 import { ProviderError, type TryOnProvider } from "../src/providers/types.ts";
 import {
@@ -169,6 +170,109 @@ describe("try-on lifecycle", () => {
 
     expect(job.error?.code).toBe(code);
     expect(raw).not.toMatch(/cloth-v4|yc-task|provider\.invalid/);
+  });
+});
+
+describe("memory limit for try-ons (R4.6, review: 500-byte limit held 666 bytes)", () => {
+  /** Size of the analysis image the backend keeps (the default test photo after metadata removal). */
+  const PHOTO = stripImageMetadata(syntheticJpeg(), "image/jpeg")!.length;
+  /** A try-on reserves its private copy of the photo plus a result of about the same size. */
+  const RESERVATION = 2 * PHOTO;
+
+  function sampleRetained(target: TestProxy) {
+    const samples: number[] = [];
+    const timer = setInterval(() => samples.push(target.retainedBytes()), 1);
+    return { samples, stop: () => clearInterval(timer) };
+  }
+
+  it("refuses to start when the reservation would exceed the limit, before any provider call", async () => {
+    const tryOn = tryOnReturning(async () => RESULT);
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { maxRetainedBytes: PHOTO + RESERVATION - 1 }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+
+    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" });
+
+    expect(response.status).toBe(503);
+    expect(parseApiErrorBody(await response.json()).error.code).toBe("PROCESSING_UNAVAILABLE");
+    expect(tryOn.calls).toBe(0);
+    expect(proxy.retainedBytes()).toBe(PHOTO);
+  });
+
+  it("rechecks the actual result size and discards a result that does not fit", async () => {
+    const limit = PHOTO + RESERVATION;
+    const oversized = { bytes: syntheticJpeg(640, 480, RESERVATION), mimeType: "image/jpeg" as const };
+    const tryOn = tryOnReturning(async () => oversized);
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { maxRetainedBytes: limit }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+    const retained = sampleRetained(proxy);
+
+    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" })).json());
+    const job = await untilTerminal(proxy, created.id);
+    retained.stop();
+
+    expect(job.state).toBe("failed");
+    expect(job.error?.code).toBe("PROCESSING_UNAVAILABLE");
+    expect(oversized.bytes.every((byte) => byte === 0)).toBe(true);
+    expect((await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${created.id}/result`)).status).toBe(404);
+    expect(Math.max(...retained.samples, proxy.retainedBytes())).toBeLessThanOrEqual(limit);
+    expect(proxy.logger.entries).toContainEqual(expect.objectContaining({ event: "try_on_result_over_budget" }));
+  });
+
+  it("never holds more than the limit across repeated try-ons", async () => {
+    const limit = 500;
+    const tryOn = tryOnReturning(async () => ({ bytes: syntheticJpeg(640, 480, 300), mimeType: "image/jpeg" as const }));
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { maxRetainedBytes: limit }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+    const retained = sampleRetained(proxy);
+
+    for (const styleId of ["neat-updo", "short-bob", "side-swept-cut"]) {
+      const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId });
+      if (response.status === 202) await untilTerminal(proxy, parseTryOnJob(await response.json()).id);
+    }
+    retained.stop();
+
+    expect(Math.max(...retained.samples, proxy.retainedBytes())).toBeLessThanOrEqual(limit);
+  });
+
+  it("frees the reservation when a try-on finishes, fails, or is cancelled", async () => {
+    const tryOn = tryOnReturning(async () => {
+      throw new ProviderError("unavailable");
+    });
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOn);
+    const analysisId = await analysisJobId(proxy);
+
+    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" })).json());
+    await untilTerminal(proxy, created.id);
+
+    expect(proxy.retainedBytes()).toBe(PHOTO);
+  });
+
+  it("keeps one try-on in progress per analysis: a new style replaces the one still running", async () => {
+    const tryOn = tryOnReturning((_image, _style, signal) => neverResolves(_image, signal) as never);
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+
+    const first = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" })).json());
+    await waitFor(async () => (tryOn.calls === 1 ? true : undefined));
+    const second = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "short-bob" });
+
+    expect(second.status).toBe(202);
+    expect(parseTryOnJob(await (await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${first.id}`)).json()).state).toBe("cancelled");
+    expect(tryOn.signals[0].aborted).toBe(true);
+    expect(proxy.retainedBytes()).toBe(PHOTO + RESERVATION);
+  });
+
+  it("caps try-ons in progress across analyses", async () => {
+    const tryOn = tryOnReturning((_image, _style, signal) => neverResolves(_image, signal) as never);
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000, maxActiveTryOns: 1 }, tryOn);
+    const [firstAnalysis, secondAnalysis] = [await analysisJobId(proxy), await analysisJobId(proxy)];
+
+    expect((await postTryOn(proxy, { analysisJobId: firstAnalysis, styleId: "neat-updo" })).status).toBe(202);
+    const refused = await postTryOn(proxy, { analysisJobId: secondAnalysis, styleId: "neat-updo" });
+
+    expect(refused.status).toBe(503);
+    expect(parseApiErrorBody(await refused.json()).error.code).toBe("PROCESSING_UNAVAILABLE");
+    expect(tryOn.calls).toBe(1);
   });
 });
 

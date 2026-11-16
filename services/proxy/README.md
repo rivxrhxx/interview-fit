@@ -33,7 +33,8 @@ All settings come from the backend environment. Never put provider credentials i
 | `TERMINAL_RETENTION_MS` | `60000` | How long a failed or cancelled job record (without image) stays readable |
 | `RATE_LIMIT_PER_MINUTE` | `10` | Job creations per client address |
 | `MAX_LIVE_JOBS` | `50` | Stored jobs before new uploads get `PROCESSING_UNAVAILABLE` |
-| `MAX_RETAINED_BYTES` | `268435456` | Image bytes held in memory across jobs and try-on results before new uploads are refused |
+| `MAX_RETAINED_BYTES` | `268435456` | Image bytes held in memory across analysis photos, try-on results, and running try-on reservations; uploads and try-ons that would pass it get `PROCESSING_UNAVAILABLE`, and a try-on result that turns out larger than its reservation is discarded |
+| `MAX_ACTIVE_TRY_ONS` | `3` | Try-ons queued or processing at once across all analyses; each analysis has at most one, and a new style replaces the one still running |
 | `SWEEP_INTERVAL_MS` | `30000` | Expiry sweep interval; at least 1000 so expired images never wait for a lookup |
 | `YOUCAM_STORAGE_HOSTS` | (none) | Optional comma-separated host suffixes allowed for pre-signed upload and result URLs. Set it in production once the provider's storage hosts are known |
 | `ANTHROPIC_API_KEY` | (none) | Optional. Enables Claude for the job analysis and suggestions. Without it, the deterministic rules engine is used |
