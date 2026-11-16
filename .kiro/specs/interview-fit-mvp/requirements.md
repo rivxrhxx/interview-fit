@@ -24,6 +24,7 @@
 - R3.2 WHEN consent is declined THE SYSTEM SHALL upload zero image bytes and keep non-image features usable.
 - R3.3 BEFORE backend processing THE SYSTEM SHALL normalize orientation, remove unnecessary metadata including GPS EXIF, and re-encode the photo as a JPEG whose long side is at most 1024 pixels.
 - R3.4 THE CONSENT TEXT SHALL name YouCam as the recipient of the photo and the AI provider as the recipient of job text and neutral observation text, and SHALL state that the photo is never sent to the AI provider.
+- R3.5 Consent and error copy SHALL describe only what has actually stayed on the device: the job text is sent at the job-analysis step, so the consent step SHALL say that no photo leaves the device until the user agrees, and error copy SHALL name Interview Fit as the party that saved nothing.
 
 ## R4 — Analysis through the first-party proxy
 
@@ -31,6 +32,9 @@
 - R4.2 THE DESKTOP SHALL NOT receive or expose YouCam credentials, vendor task IDs, file IDs, authorization headers, or vendor URLs.
 - R4.3 WHEN processing times out THE SYSTEM SHALL stop polling, request cleanup, and show a retryable neutral error.
 - R4.4 WHEN the user cancels THE SYSTEM SHALL stop polling and discard temporary image references.
+- R4.5 WHEN the user cancels a try-on, or the connection closes, before the desktop has learned the job ID THE SYSTEM SHALL still cancel the backend job, using the request's idempotency key.
+- R4.6 THE BACKEND SHALL keep image bytes held for analyses and try-ons, including results, within the configured memory limit: it SHALL reserve the expected size before a try-on starts, recheck the actual result size before storing it, discard a result that does not fit, and limit try-ons in progress.
+- R4.7 WHEN a finished analysis is deleted THE BACKEND SHALL delete its result as well as its image, so the result cannot be read again.
 
 ## R5 — Recommendations
 
@@ -52,6 +56,7 @@
 
 - R7.1 THE REPORT SHALL include the job analysis, neutral observations including skin-prep tips, interview-style suggestions, the hairstyle try-on status and chosen style name, generation time, and privacy notice.
 - R7.2 THE DEFAULT EXPORT SHALL NOT embed the source photo.
+- R7.3 THE REPORT SHALL record a hairstyle preview created in this session, with its style name, even after the try-on screen was closed or reset.
 
 ## R8 — Accessibility and resilience
 

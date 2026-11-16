@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "TypeScript quality gate",
+      "description": "After the agent saves a TypeScript file in the desktop app, backend, or contracts, run the fast harness and fix only errors the edit caused.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)src/.+\\.tsx?$",
+      "enabled": true,
+      "action": {
+        "type": "agent",
+        "prompt": "A TypeScript file was just saved. Run `npm run verify:fast`. If it fails, fix only errors caused by the files changed in this session, then run it again. Report the exact commands and their results, and do not claim a check passed unless you ran it."
+      }
+    }
+  ]
+}
