@@ -10,7 +10,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Requirements: R9.3
   - Verify: `npm run verify:harness`
 
-- [ ] 2.1 Create feature-oriented application shell
+- [x] 2.1 Create feature-oriented application shell
   - Requirements: R8.1
   - Tests first: keyboard navigation and state rendering
   - Verify: `npm run verify:fast`
