@@ -1,10 +1,17 @@
 import { loadConfig } from "./config.ts";
 import { stdoutLogger } from "./logger.ts";
 import { createSimulatorProvider } from "./providers/simulator.ts";
+import type { AnalysisProvider } from "./providers/types.ts";
+import { createYouCamAnalysisProvider } from "./providers/youcam/analysisProvider.ts";
+import { loadYouCamConfig } from "./providers/youcam/config.ts";
 import { createProxy } from "./server.ts";
 
 const config = loadConfig(process.env);
-const provider = createSimulatorProvider(config.simulator);
+// Provider secrets are read from the backend environment here and nowhere else.
+const provider: AnalysisProvider =
+  config.provider === "youcam"
+    ? createYouCamAnalysisProvider({ config: loadYouCamConfig(process.env), logger: stdoutLogger })
+    : createSimulatorProvider(config.simulator);
 const proxy = createProxy({ config, provider, logger: stdoutLogger });
 
 proxy.server.listen(config.port, config.host, () => {

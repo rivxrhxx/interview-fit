@@ -53,6 +53,7 @@ Errors use `{ error: { code, message, retryable, correlationId } }` and never in
 - Bounded polling, timeout, retry, and cleanup.
 - No durable image history; explicit result export only.
 - Treat job text as untrusted prompt content.
+- YouCam analysis uses `face-attr-analysis` with the single least sensitive required feature (`hairColor`). The adapter translates only `face_quality` and face-position errors into neutral observations and drops every facial attribute. Skin analysis is not used. Decision approved by the project owner on 2026-11-16; details in `services/proxy/README.md`.
 
 ## Test strategy
 

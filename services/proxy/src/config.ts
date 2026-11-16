@@ -12,7 +12,7 @@ export interface ProxyConfig {
   providerTimeoutMs: number;
   rateLimitPerMinute: number;
   sweepIntervalMs: number;
-  provider: "simulator";
+  provider: "simulator" | "youcam";
   simulator: { delayMs: number; scenario: SimulatorScenario };
 }
 
@@ -28,7 +28,7 @@ function integer(value: string | undefined, fallback: number, min: number): numb
 
 export function loadConfig(env: Record<string, string | undefined>): ProxyConfig {
   const provider = env.INTERVIEW_FIT_PROVIDER ?? "simulator";
-  if (provider !== "simulator") throw new Error(`Unsupported provider: ${provider}`);
+  if (provider !== "simulator" && provider !== "youcam") throw new Error(`Unsupported provider: ${provider}`);
   const scenario = (env.SIMULATOR_SCENARIO ?? "success") as SimulatorScenario;
   if (!SCENARIOS.includes(scenario)) throw new Error(`Unsupported simulator scenario: ${scenario}`);
 

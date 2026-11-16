@@ -44,7 +44,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: timeout, cancel, rate limit, malformed provider response, cleanup
   - Verify: proxy integration suite
 
-- [ ] 6.3 Implement YouCam provider adapter
+- [x] 6.3 Implement YouCam provider adapter
   - Requirements: R4.2
   - Tests first: secret redaction, provider ID hiding, idempotency
   - Verify: mocked provider tests; optional low-volume live smoke
