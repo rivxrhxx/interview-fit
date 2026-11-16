@@ -2,3 +2,4 @@
 //! delegates domain logic to a testable module.
 
 pub mod image;
+pub mod report;

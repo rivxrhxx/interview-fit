@@ -1,6 +1,7 @@
 import type { AnalysisJobId, AnalysisResult, ErrorCode, Recovery, TryOnJobId } from "../lib/api/contracts";
 import type { AnalysisStage } from "../features/analysis";
 import type { PreparedImage } from "../features/capture";
+import type { TryOnReportStatus } from "../features/report";
 import type { TryOnPhase } from "../features/try-on";
 import { isConsentCurrent, type ConsentRecord } from "../features/consent";
 import type { JobDescription } from "../features/job-posting";
@@ -34,6 +35,14 @@ export type FlowState =
       tryOn: TryOnPhase;
       attempt: number;
     }
+  | {
+      step: "report-ready";
+      job: JobDescription;
+      image: PreparedImage;
+      analysis: ReviewedAnalysis;
+      tryOn: TryOnReportStatus;
+      generatedAt: string;
+    }
   | { step: "error"; code: ErrorCode; context: AnalysisContext; attempt: number };
 
 export type FlowEvent =
@@ -56,7 +65,9 @@ export type FlowEvent =
   | { type: "TRY_ON_FAILED"; code: ErrorCode }
   | { type: "TRY_ON_CANCELLED" }
   | { type: "TRY_ON_RESET" }
-  | { type: "TRY_ON_CLOSED" };
+  | { type: "TRY_ON_CLOSED" }
+  | { type: "REPORT_REQUESTED"; generatedAt: string }
+  | { type: "REPORT_CLOSED" };
 
 export const initialFlowState: FlowState = { step: "draft", job: { status: "editing", text: "" } };
 
@@ -78,6 +89,14 @@ function recover(state: Extract<FlowState, { step: "error" }>, recovery: Recover
     case "start-over":
       return savedDraft(job);
   }
+}
+
+function reportFrom(
+  state: { job: JobDescription; image: PreparedImage; analysis: ReviewedAnalysis },
+  tryOn: TryOnReportStatus,
+): Omit<Extract<FlowState, { step: "report-ready" }>, "generatedAt"> {
+  // The try-on preview itself is dropped here; only its status goes into the report (R7.1, R6.3).
+  return { step: "report-ready", job: state.job, image: state.image, analysis: state.analysis, tryOn };
 }
 
 function tryOnTransition(state: Extract<FlowState, { step: "trying-on" }>, event: FlowEvent): FlowState {
@@ -173,11 +192,26 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
           return savedDraft(state.job);
         case "TRY_ON_OPENED":
           return { step: "trying-on", job: state.job, image: state.image, analysis: state.analysis, tryOn: { status: "idle" }, attempt: 0 };
+        case "REPORT_REQUESTED":
+          return { ...reportFrom(state, "not-created"), generatedAt: event.generatedAt };
         default:
           return state;
       }
     case "trying-on":
+      if (event.type === "REPORT_REQUESTED" && state.tryOn.status !== "running") {
+        const status = state.tryOn.status === "ready" ? "created" : state.tryOn.status === "failed" ? "unavailable" : "not-created";
+        return { ...reportFrom(state, status), generatedAt: event.generatedAt };
+      }
       return tryOnTransition(state, event);
+    case "report-ready":
+      switch (event.type) {
+        case "REPORT_CLOSED":
+          return { step: "reviewed", job: state.job, image: state.image, analysis: state.analysis };
+        case "START_OVER":
+          return savedDraft(state.job);
+        default:
+          return state;
+      }
     case "error":
       return event.type === "RECOVERY_SELECTED" ? recover(state, event.recovery) : state;
   }

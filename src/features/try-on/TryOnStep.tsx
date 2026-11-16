@@ -29,6 +29,7 @@ interface TryOnStepProps {
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
+  onContinue: () => void;
 }
 
 function TryOnRunner({
@@ -111,6 +112,11 @@ export function TryOnStep(props: TryOnStepProps) {
         {phase.status === "failed" && ERROR_POLICY[phase.code].retryable && (
           <button type="button" className="button button-primary" onClick={props.onStart}>
             Try again
+          </button>
+        )}
+        {phase.status !== "running" && (
+          <button type="button" className="button button-secondary" onClick={props.onContinue}>
+            Continue to report
           </button>
         )}
         {phase.status !== "running" && (
