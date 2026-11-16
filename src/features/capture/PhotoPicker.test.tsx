@@ -28,7 +28,7 @@ describe("PhotoPicker", () => {
     await user.tab();
 
     expect(screen.getByRole("button", { name: "Choose a photo" })).toHaveFocus();
-    expect(screen.getByLabelText("Photo file")).toHaveAttribute("accept", "image/jpeg,image/png");
+    expect(await screen.findByLabelText("Photo file")).toHaveAttribute("accept", "image/jpeg,image/png");
   });
 
   it("rejects an unsupported format with a neutral message (R2.3)", async () => {

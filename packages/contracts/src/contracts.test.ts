@@ -12,8 +12,10 @@ import {
   ERROR_MESSAGES,
   ERROR_POLICY,
   TRY_ON_STYLES,
+  JOB_INSIGHT_FIELDS,
   parseAnalysisJob,
   parseApiErrorBody,
+  parseJobAnalysis,
   parseTryOnJob,
   type ErrorCode,
 } from "./index.ts";
@@ -27,6 +29,7 @@ function loadFixtures(dir: string): Array<{ name: string; value: unknown }> {
 }
 
 const PARSERS: Record<string, (value: unknown) => unknown> = {
+  "job-analysis": parseJobAnalysis,
   "analysis-job": parseAnalysisJob,
   "try-on-job": parseTryOnJob,
   error: parseApiErrorBody,
@@ -57,6 +60,7 @@ describe("contract fixtures", () => {
         "error.image-invalid.json",
         "error.consent-required.json",
         "try-on-job.succeeded.json",
+        "job-analysis.succeeded.json",
       ]),
     );
   });
@@ -112,6 +116,55 @@ describe("parsers reject malformed payloads", () => {
   });
 });
 
+describe("job analysis contract (R1.4)", () => {
+  const fixture = loadFixtures(fixturesDir).find((entry) => entry.name === "job-analysis.succeeded.json")!.value as {
+    jobContext: Record<string, unknown> & { points: Array<Record<string, unknown>> };
+  };
+  const withPoints = (points: unknown) => ({ ...fixture, jobContext: { ...fixture.jobContext, points } });
+
+  it("keeps one point per field, in display order", () => {
+    const parsed = parseJobAnalysis(fixture);
+    expect(parsed.jobContext.points.map((point) => point.id)).toEqual([...JOB_INSIGHT_FIELDS]);
+  });
+
+  it("allows a point the posting does not state (both fields null)", () => {
+    const points = fixture.jobContext.points.map((point) =>
+      point.id === "dress-code" ? { id: "dress-code", value: null, evidence: null } : point,
+    );
+    expect(parseJobAnalysis(withPoints(points)).jobContext.points[4]).toEqual({ id: "dress-code", value: null, evidence: null });
+  });
+
+  it.each([
+    ["a finding without its quote", (points: Array<Record<string, unknown>>) => points.map((point, index) => (index === 0 ? { ...point, evidence: null } : point))],
+    ["a missing field", (points: Array<Record<string, unknown>>) => points.slice(1)],
+    ["fields out of order", (points: Array<Record<string, unknown>>) => [points[1], points[0], ...points.slice(2)]],
+    ["an unknown field", (points: Array<Record<string, unknown>>) => [...points.slice(0, 4), { id: "personality", value: "x", evidence: "x" }]],
+  ])("rejects %s", (_label, mutate) => {
+    expect(() => parseJobAnalysis(withPoints(mutate(fixture.jobContext.points)))).toThrow(ContractError);
+  });
+
+  it("rejects an unknown source or formality", () => {
+    expect(() => parseJobAnalysis({ ...fixture, jobContext: { ...fixture.jobContext, source: "model-x" } })).toThrow(ContractError);
+    expect(() => parseJobAnalysis({ ...fixture, jobContext: { ...fixture.jobContext, formality: "fancy" } })).toThrow(ContractError);
+  });
+
+  it("lets a recommendation cite a job-analysis point that has evidence", () => {
+    const succeeded = loadFixtures(fixturesDir).find((entry) => entry.name === "analysis-job.succeeded.json")!.value as {
+      result: { recommendations: Array<Record<string, unknown>> };
+    };
+    const citing = {
+      ...succeeded,
+      result: {
+        ...succeeded.result,
+        recommendations: [{ ...succeeded.result.recommendations[1], cueIds: ["industry"] }],
+      },
+    };
+    expect(parseAnalysisJob(citing).result!.recommendations[0].cueIds).toEqual(["industry"]);
+    const notStated = { ...citing, result: { ...citing.result, recommendations: [{ ...citing.result.recommendations[0], cueIds: ["dress-code"] }] } };
+    expect(() => parseAnalysisJob(notStated)).toThrow(ContractError);
+  });
+});
+
 describe("error codes", () => {
   it.each(ERROR_CODES.map((code) => [code]))("%s has a recovery policy and a neutral message (R8.3)", (code: ErrorCode) => {
     expect(ERROR_POLICY[code]).toBeDefined();
@@ -131,6 +184,7 @@ describe("error codes", () => {
 describe("routes and catalog", () => {
   it("exposes only relative first-party paths (R4.1)", () => {
     const paths = [
+      API_ROUTES.jobAnalyses,
       API_ROUTES.analysisJobs,
       API_ROUTES.analysisJob("an_0123456789abcdefghij"),
       API_ROUTES.tryOnJobs,

@@ -6,7 +6,7 @@ import {
   type ErrorCode,
   type Locale,
 } from "../../../../packages/contracts/src/index.ts";
-import type { GuidanceEngine } from "../guidance.ts";
+import type { Advisor } from "../guidance.ts";
 import { newAnalysisJobId, newCorrelationId } from "../ids.ts";
 import type { ImageInfo } from "../imageInspect.ts";
 import type { Logger } from "../logger.ts";
@@ -25,7 +25,7 @@ export const PROVIDER_ERROR_CODES: Record<ProviderErrorKind, ErrorCode> = {
 export interface AnalysisJobsOptions {
   store: JobStore;
   provider: AnalysisProvider;
-  guidance: GuidanceEngine;
+  advisor: Advisor;
   logger: Logger;
   now: () => number;
   jobTtlMs: number;
@@ -58,7 +58,7 @@ export function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, contr
 }
 
 export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
-  const { store, provider, guidance, logger, now } = options;
+  const { store, provider, advisor, logger, now } = options;
 
   function finish(record: AnalysisJobRecord, state: "succeeded" | "failed" | "cancelled", error: ErrorCode | null) {
     record.state = state;
@@ -89,26 +89,29 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
       const image = record.image;
       const imageInfo = record.imageInfo;
       if (!image || !imageInfo) throw new ProviderError("invalid-image");
-      const raw = await withDeadline(
-        (signal) => provider.analyze({ bytes: image, ...imageInfo }, signal, record.locale),
+      const jobDescription = record.jobDescription ?? "";
+      const locale = record.locale;
+      const result = await withDeadline(
+        async (signal) => {
+          // The job analysis is usually cached from the job step, so this adds no second AI call.
+          const [raw, jobContext] = await Promise.all([
+            provider.analyze({ bytes: image, ...imageInfo }, signal, locale),
+            advisor.analyzeJob(jobDescription, locale, signal),
+          ]);
+          // Provider text is filtered by the same content policy as generated guidance (R5.3).
+          const parsed = parseObservations(raw);
+          const observations = parsed.filter((observation) => passesContentPolicy(observation.text));
+          if (observations.length < parsed.length) {
+            logger.log({ level: "warn", event: "policy_blocked_observations", count: parsed.length - observations.length });
+          }
+          const recommendations = await advisor.suggest({ jobDescription, jobContext, observations, locale }, signal);
+          return { jobContext, observations, recommendations };
+        },
         controller,
         options.providerTimeoutMs,
       );
       if (record.state !== "processing") return;
-      // Provider text is filtered by the same content policy as generated guidance (R5.3).
-      const parsed = parseObservations(raw);
-      const observations = parsed.filter((observation) => passesContentPolicy(observation.text));
-      if (observations.length < parsed.length) {
-        logger.log({ level: "warn", event: "policy_blocked_observations", count: parsed.length - observations.length });
-      }
-      const { jobContext, recommendations } = guidance.build(record.jobDescription ?? "", observations, record.locale);
-      record.result = {
-        generatedAt: new Date(now()).toISOString(),
-        locale: record.locale,
-        jobContext,
-        observations,
-        recommendations,
-      };
+      record.result = { generatedAt: new Date(now()).toISOString(), locale, ...result };
       finish(record, "succeeded", null);
     } catch (error) {
       if (record.state !== "processing") return;

@@ -6,6 +6,7 @@ import {
   ERROR_MESSAGES,
   ERROR_POLICY,
   IMAGE_MAX_BYTES,
+  JOB_ANALYSIS_REQUEST_FIELDS,
   TRY_ON_JOB_ID_PATTERN,
   TRY_ON_STYLES,
   checkJobDescription,
@@ -13,16 +14,16 @@ import {
   type AnalysisJob,
   type AnalysisJobId,
   type ErrorCode,
+  type JobAnalysis,
   type TryOnJob,
   type TryOnStyleId,
 } from "../../../packages/contracts/src/index.ts";
 import type { ProxyConfig } from "./config.ts";
-import type { GuidanceEngine } from "./guidance.ts";
-import { defaultGuidance } from "./guidance/engine.ts";
+import { createAdvisor, type AiWriter } from "./guidance.ts";
 import { BodyTooLargeError, parseMultipart, readBody } from "./http/body.ts";
 import { newCorrelationId } from "./ids.ts";
 import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
-import { createAnalysisJobs } from "./jobs/analysisJobs.ts";
+import { createAnalysisJobs, toErrorCode, withDeadline } from "./jobs/analysisJobs.ts";
 import { createJobStore, type AnalysisJobRecord, type JobStore } from "./jobs/store.ts";
 import { createTryOnJobs, type TryOnJobRecord } from "./jobs/tryOnJobs.ts";
 import type { Logger } from "./logger.ts";
@@ -33,6 +34,8 @@ import { createRateLimiter } from "./rateLimit.ts";
 const MAX_BODY_BYTES = IMAGE_MAX_BYTES + 128 * 1024;
 
 const MAX_JSON_BODY_BYTES = 4 * 1024;
+/** A maximum-length job description in UTF-8 plus JSON framing. */
+const MAX_JOB_ANALYSIS_BODY_BYTES = 64 * 1024;
 const TRY_ON_STYLE_IDS: readonly string[] = TRY_ON_STYLES.map((style) => style.id);
 
 /** Client-generated retry key; a repeat within the job's lifetime returns the same job. */
@@ -44,7 +47,8 @@ export interface ProxyDeps {
   /** Optional: without it, try-on requests fail with PROCESSING_UNAVAILABLE. */
   tryOnProvider?: TryOnProvider;
   logger: Logger;
-  guidance?: GuidanceEngine;
+  /** Optional AI writer (Claude). Without it, the deterministic rules engine is used (R1.6). */
+  ai?: AiWriter | null;
   now?: () => number;
 }
 
@@ -68,6 +72,7 @@ class HttpError extends Error {
 }
 
 const ROUTES = {
+  jobAnalyses: "/v1/job-analyses",
   collection: "/v1/analysis-jobs",
   item: /^\/v1\/analysis-jobs\/([^/]+)$/,
   tryOnCollection: "/v1/try-on-jobs",
@@ -124,10 +129,11 @@ export function createProxy(deps: ProxyDeps): Proxy {
   // Deleting or expiring an analysis job also deletes try-on results made from it.
   let tryOnCascade: ((analysisJobId: string) => void) | undefined;
   const store = createJobStore(now, { onRemove: (id) => tryOnCascade?.(id) });
+  const advisor = createAdvisor({ ai: deps.ai ?? null, logger, now, cacheTtlMs: config.jobTtlMs });
   const jobs = createAnalysisJobs({
     store,
     provider: deps.provider,
-    guidance: deps.guidance ?? defaultGuidance,
+    advisor,
     logger,
     now,
     jobTtlMs: config.jobTtlMs,
@@ -259,6 +265,46 @@ export function createProxy(deps: ProxyDeps): Proxy {
     return record;
   }
 
+  /** Job and company-atmosphere analysis from text only; no image, no consent needed (R1.4, R1.5). */
+  async function analyzeJob(request: IncomingMessage, response: ServerResponse): Promise<JobAnalysis> {
+    const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
+    if (!decision.allowed) {
+      request.resume();
+      throw new HttpError("RATE_LIMITED", { headers: { "Retry-After": String(decision.retryAfterSeconds) } });
+    }
+    if (!(request.headers["content-type"] ?? "").startsWith("application/json")) {
+      request.resume();
+      throw new HttpError("REQUEST_INVALID");
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(new TextDecoder().decode(await readBody(request, MAX_JOB_ANALYSIS_BODY_BYTES)));
+    } catch (error) {
+      throw new HttpError(error instanceof BodyTooLargeError ? "JOB_DESCRIPTION_INVALID" : "REQUEST_INVALID");
+    }
+    const fields = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+    const rawJob = fields[JOB_ANALYSIS_REQUEST_FIELDS.jobDescription];
+    const job = typeof rawJob === "string" ? checkJobDescription(rawJob) : null;
+    if (!job?.ok) throw new HttpError("JOB_DESCRIPTION_INVALID");
+    const requestedLocale = fields[JOB_ANALYSIS_REQUEST_FIELDS.locale];
+    const locale = isLocale(requestedLocale) ? requestedLocale : "en";
+
+    // Stop AI work when the desktop goes away (for example, the user edits the posting).
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!response.writableFinished) controller.abort(new Error("client closed"));
+    };
+    response.once("close", onClose);
+    try {
+      const jobContext = await withDeadline((signal) => advisor.analyzeJob(job.text, locale, signal), controller, config.providerTimeoutMs);
+      return { generatedAt: iso(now()), locale, jobContext };
+    } catch (error) {
+      throw new HttpError(toErrorCode(error));
+    } finally {
+      response.off("close", onClose);
+    }
+  }
+
   function lookupTryOn(rawId: string): TryOnJobRecord {
     const record = TRY_ON_JOB_ID_PATTERN.test(rawId) ? tryOns?.get(rawId) : undefined;
     if (!record) throw new HttpError("JOB_NOT_FOUND");
@@ -306,6 +352,16 @@ export function createProxy(deps: ProxyDeps): Proxy {
   async function route(request: IncomingMessage, response: ServerResponse, cors: Record<string, string>) {
     const path = new URL(request.url ?? "/", "http://proxy.local").pathname;
     const method = request.method ?? "GET";
+
+    if (path === ROUTES.jobAnalyses) {
+      if (method !== "POST") {
+        request.resume();
+        throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "POST, OPTIONS" } });
+      }
+      const analysis = await analyzeJob(request, response);
+      if (!response.destroyed) send(response, 200, analysis, cors);
+      return "/v1/job-analyses";
+    }
 
     if (path === ROUTES.collection) {
       if (method === "DELETE") {

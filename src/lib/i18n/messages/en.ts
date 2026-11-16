@@ -1,4 +1,11 @@
-import { ERROR_MESSAGES, type ErrorCode, type ObservationCategory, type Recovery } from "../../api/contracts";
+import {
+  ERROR_MESSAGES,
+  type ErrorCode,
+  type Formality,
+  type JobInsightField,
+  type ObservationCategory,
+  type Recovery,
+} from "../../api/contracts";
 
 type StepCopy = { label: string; heading: string; description: string };
 
@@ -17,9 +24,14 @@ export const en = {
   },
   steps: {
     draft: {
-      label: "Job & photo",
-      heading: "Describe the role and choose a photo",
+      label: "Job posting",
+      heading: "Tell us about the role",
       description: "Suggestions are tailored to the posting, always optional, and never judge how you look.",
+    },
+    "job-reviewed": {
+      label: "Job analysis",
+      heading: "What the posting tells us",
+      description: "Every point quotes the posting. Next, add a photo.",
     },
     "image-ready": {
       label: "Preview",
@@ -68,7 +80,8 @@ export const en = {
   } as Record<Recovery, string>,
   notices: {
     consentDeclined:
-      "Your photo was discarded and nothing was uploaded. You can keep editing the job description or choose another photo.",
+      "Your photo was discarded and nothing was uploaded. You can edit the job description or choose another photo.",
+    jobAnalyzing: "Reading the posting…",
     uploading: "Uploading your photo securely…",
     processing: "Analyzing presentation cues…",
   },
@@ -79,11 +92,41 @@ export const en = {
     empty: "Enter a job description to continue.",
     tooLong: (max: number, length: number) =>
       `Shorten the job description to ${count(max)} characters or fewer (currently ${count(length)}).`,
-    save: "Save job description",
+    save: "Analyze posting",
+    sendNotice:
+      "Analyzing sends the posting text to the Interview Fit backend and its AI provider (Anthropic). No photo is sent at this step.",
     summaryTitle: "Job description",
     edit: "Edit",
     editLabel: "Edit job description",
     saved: (length: number) => `${count(length)} characters saved`,
+  },
+  insight: {
+    title: "Job analysis",
+    loading: "Reading the posting…",
+    source: { ai: "AI analysis", rules: "Basic analysis" },
+    rulesNote: "AI analysis was not available, so this is a basic keyword analysis of the posting.",
+    fields: {
+      role: "Role",
+      industry: "Industry",
+      atmosphere: "Atmosphere",
+      "interview-format": "Interview format",
+      "dress-code": "Dress code",
+    } as Record<JobInsightField, string>,
+    notStated: "Not stated in the posting",
+    quote: (evidence: string) => `“${evidence}”`,
+    formalityTitle: "Suggested dress formality",
+    formality: {
+      formal: "Formal",
+      "business-casual": "Business casual",
+      "smart-casual": "Smart casual",
+      casual: "Casual",
+      unknown: "No clear cue",
+    } as Record<Formality, string>,
+    formalityUnknown: "The posting gives no clear cue about dress formality.",
+    selected: "(suggested)",
+    failed: "The posting could not be analyzed.",
+    retry: "Try again",
+    edit: "Edit posting",
   },
   photo: {
     title: "Photo",

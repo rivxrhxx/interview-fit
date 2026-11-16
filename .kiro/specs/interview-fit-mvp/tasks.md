@@ -80,7 +80,7 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
   - Requirements: R1.4-R1.6, R3.3-R3.4, R5.4-R5.6, R6.1-R6.4, R7.1
   - Verify: `npm run verify:harness`
 
-- [ ] 12.2 Implement the job and company-atmosphere analysis step (rules engine)
+- [x] 12.2 Implement the job and company-atmosphere analysis step (rules engine)
   - Requirements: R1.3, R1.4, R1.5
   - Tests first: evidence quoted verbatim, "not stated" fields, prompt-injection text treated as data, Korean postings, notice shown before sending, retry on failure
   - Verify: `npm run verify:fast`

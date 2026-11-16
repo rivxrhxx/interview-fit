@@ -9,7 +9,13 @@ export function filterGuidance(result: AnalysisResult): AnalysisResult {
   return {
     ...result,
     jobContext: {
+      ...result.jobContext,
       summary: passesContentPolicy(result.jobContext.summary) ? result.jobContext.summary : "",
+      points: result.jobContext.points.map((point) =>
+        point.value !== null && point.evidence !== null && passesContentPolicy(point.value) && passesContentPolicy(point.evidence)
+          ? point
+          : { id: point.id, value: null, evidence: null },
+      ),
       cues,
     },
     observations: result.observations.filter((observation) => passesContentPolicy(observation.text)),

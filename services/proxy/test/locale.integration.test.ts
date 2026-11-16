@@ -2,7 +2,8 @@
 // Korean analysis output: localized observations and guidance, Korean job cues, same policy.
 import { afterEach, describe, expect, it } from "vitest";
 import { parseAnalysisJob, passesContentPolicy } from "../../../packages/contracts/src/index.ts";
-import { createPolicyGuidance, rulesGuidance } from "../src/guidance/engine.ts";
+import { filterRecommendations, suggestRules } from "../src/guidance/engine.ts";
+import { analyzeJobRules } from "../src/guidance/jobAnalysis.ts";
 import { extractJobCues } from "../src/guidance/jobCues.ts";
 import { createSimulatorProvider } from "../src/providers/simulator.ts";
 import { analysisForm, postAnalysis, startProxy, waitFor, type TestProxy } from "./helpers.ts";
@@ -41,12 +42,12 @@ describe("Korean job cues", () => {
 
 describe("Korean guidance", () => {
   it("produces Korean, policy-compliant suggestions that cite their cues", () => {
-    const engine = createPolicyGuidance(rulesGuidance);
     const observations = [
       { id: "obs_lighting", category: "lighting" as const, assessment: "adjustable" as const, text: "조명" },
     ];
 
-    const output = engine.build(KO_JD, observations, "ko");
+    const jobContext = analyzeJobRules(KO_JD, "ko");
+    const output = { jobContext, recommendations: filterRecommendations(suggestRules(jobContext, observations, "ko"), jobContext, observations) };
 
     expect(output.jobContext.summary).toMatch(HANGUL);
     expect(output.recommendations.length).toBeGreaterThan(1);

@@ -15,8 +15,8 @@ const runningTryOn: TryOnJob = { ...queuedTryOn(), state: "processing" };
 
 async function reachGuidance(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Job description"), "Client-facing consultant. Interviews are held over video.");
-  await user.click(screen.getByRole("button", { name: "Save job description" }));
-  await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+  await user.click(screen.getByRole("button", { name: "Analyze posting" }));
+  await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
   await user.click(await screen.findByRole("button", { name: "Use this photo" }));
   await user.click(screen.getByRole("checkbox"));
   await user.click(screen.getByRole("button", { name: "Agree and analyze" }));

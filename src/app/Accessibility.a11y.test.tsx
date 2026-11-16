@@ -19,11 +19,11 @@ async function expectAccessible() {
 
 async function saveJob(user: User) {
   await user.type(screen.getByLabelText("Job description"), "Client-facing consultant. Interviews are held over video.");
-  await user.click(screen.getByRole("button", { name: "Save job description" }));
+  await user.click(screen.getByRole("button", { name: "Analyze posting" }));
 }
 
 async function choosePhoto(user: User) {
-  await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+  await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
   await screen.findByRole("button", { name: "Use this photo" });
 }
 
@@ -55,7 +55,7 @@ describe("automated accessibility checks (axe-core)", () => {
     renderApp();
 
     await expectAccessible(); // draft: job description
-    await user.click(screen.getByRole("button", { name: "Save job description" }));
+    await user.click(screen.getByRole("button", { name: "Analyze posting" }));
     await expectAccessible(); // draft: inline validation error
     await saveJob(user);
     await expectAccessible(); // draft: photo picker
@@ -151,7 +151,7 @@ describe("controlled, recoverable failure states (R8.3)", () => {
     await user.click(await screen.findByRole("button", { name: "Cancel analysis" }));
 
     expect(screen.getByRole("heading", { level: 1, name: "Check your photo" })).toHaveFocus();
-    expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 7");
+    expect(screen.getByRole("status")).toHaveTextContent("Step 3 of 8");
   });
 });
 
@@ -171,14 +171,14 @@ describe("keyboard-only walkthrough (R8.1)", () => {
 
     await tabTo(user, "Job description", "textbox");
     await user.keyboard("Client-facing consultant. Interviews are held over video.");
-    await tabTo(user, "Save job description");
+    await tabTo(user, "Analyze posting");
     await user.keyboard("{Enter}");
 
     await tabTo(user, "Choose a photo");
     await user.keyboard("{Enter}");
     expect(fileDialog).toHaveBeenCalled();
     // The operating system's file dialog returns the chosen file.
-    await user.upload(screen.getByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
+    await user.upload(await screen.findByLabelText("Photo file"), syntheticFile(JPEG_SIGNATURE, "me.jpg", "image/jpeg"));
 
     await screen.findByRole("button", { name: "Use this photo" });
     await tabTo(user, "Use this photo");

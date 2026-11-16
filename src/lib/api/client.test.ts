@@ -5,6 +5,7 @@ import leakedJob from "../../../packages/contracts/fixtures/leaks/analysis-job.w
 import queued from "../../../packages/contracts/fixtures/analysis-job.queued.json";
 import rateLimited from "../../../packages/contracts/fixtures/error.rate-limited.json";
 import tryOnSucceeded from "../../../packages/contracts/fixtures/try-on-job.succeeded.json";
+import jobAnalysis from "../../../packages/contracts/fixtures/job-analysis.succeeded.json";
 import { ApiRequestError, createHttpApiClient } from "./client";
 import { resolveApiBaseUrl } from "./config";
 import { CURRENT_CONSENT_VERSION, type AnalysisJobId, type TryOnJobId } from "./contracts";
@@ -21,6 +22,24 @@ function clientWith(fetchImpl: typeof fetch) {
 }
 
 describe("createHttpApiClient", () => {
+  it("sends only the posting text and language as JSON for the job analysis (R1.5)", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(jobAnalysis));
+
+    const result = await clientWith(fetchMock).analyzeJob({ jobDescription: "Analyst", locale: "ko" });
+
+    expect(result.jobContext.points).toHaveLength(5);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${BASE}/v1/job-analyses`);
+    expect(init).toMatchObject({ method: "POST", credentials: "omit", redirect: "error" });
+    expect(JSON.parse(init.body as string)).toEqual({ jobDescription: "Analyst", locale: "ko" });
+  });
+
+  it("maps a malformed job analysis to a stable error", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ...jobAnalysis, jobContext: { summary: "x" } }));
+
+    await expect(clientWith(fetchMock).analyzeJob({ jobDescription: "Analyst" })).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+  });
+
   it("posts consent version, job text, and the normalized image to the first-party backend only (R4.1)", async () => {
     const fetchMock = vi.fn(async () => jsonResponse(queued, 202));
     const image = new Blob(["jpeg-bytes"], { type: "image/jpeg" });

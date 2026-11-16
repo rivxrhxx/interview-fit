@@ -1,10 +1,11 @@
 import { vi } from "vitest";
 import queuedFixture from "../../packages/contracts/fixtures/analysis-job.queued.json";
 import succeededFixture from "../../packages/contracts/fixtures/analysis-job.succeeded.json";
+import jobAnalysisFixture from "../../packages/contracts/fixtures/job-analysis.succeeded.json";
 import tryOnSucceededFixture from "../../packages/contracts/fixtures/try-on-job.succeeded.json";
 import type { Adapters } from "../lib/adapters";
 import type { ApiClient } from "../lib/api/client";
-import { parseAnalysisJob, parseTryOnJob, type TryOnJob } from "../lib/api/contracts";
+import { parseAnalysisJob, parseJobAnalysis, parseTryOnJob, type TryOnJob } from "../lib/api/contracts";
 import { fakeStream } from "./media";
 
 export function queuedTryOn(): TryOnJob {
@@ -13,6 +14,7 @@ export function queuedTryOn(): TryOnJob {
 
 export function mockApi(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    analyzeJob: vi.fn(async () => parseJobAnalysis(jobAnalysisFixture)),
     createAnalysisJob: vi.fn(async () => parseAnalysisJob(queuedFixture)),
     getAnalysisJob: vi.fn(async () => parseAnalysisJob(succeededFixture)),
     cancelAnalysisJob: vi.fn(async () => {}),

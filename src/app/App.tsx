@@ -16,7 +16,13 @@ import { ReportStep } from "../features/report";
 import { TryOnStep, tryOnNotice } from "../features/try-on";
 import { useAdapters } from "../lib/adapters";
 import { useI18n, type Messages } from "../lib/i18n";
-import { JobDescriptionForm, JobDescriptionSummary } from "../features/job-posting";
+import {
+  JobDescriptionForm,
+  JobDescriptionSummary,
+  JobInsightError,
+  JobInsightLoader,
+  JobInsightView,
+} from "../features/job-posting";
 
 export type { AnalysisTiming } from "../features/analysis";
 
@@ -24,7 +30,7 @@ type Dispatch = (event: FlowEvent) => void;
 
 function noticeFor(state: FlowState, m: Messages): string | undefined {
   switch (state.step) {
-    case "draft":
+    case "job-reviewed":
       return state.notice === "consent-declined" ? m.notices.consentDeclined : undefined;
     case "analyzing":
       return state.stage === "uploading" ? m.notices.uploading : m.notices.processing;
@@ -37,16 +43,32 @@ function noticeFor(state: FlowState, m: Messages): string | undefined {
   }
 }
 
-function DraftStep({ state, dispatch }: { state: Extract<FlowState, { step: "draft" }>; dispatch: Dispatch }) {
-  if (state.job.status === "editing") {
-    return (
-      <JobDescriptionForm initialText={state.job.text} onSubmit={(job) => dispatch({ type: "JOB_SAVED", job })} />
-    );
-  }
+function JobReviewedStep({ state, dispatch }: { state: Extract<FlowState, { step: "job-reviewed" }>; dispatch: Dispatch }) {
+  const { insight } = state;
   return (
     <div className="step-stack">
-      <JobDescriptionSummary job={state.job.value} onEdit={() => dispatch({ type: "JOB_EDIT_REQUESTED" })} />
-      <PhotoPicker onImageReady={(image) => dispatch({ type: "IMAGE_PREPARED", image })} />
+      {insight.status === "loading" && (
+        <JobInsightLoader
+          key={insight.attempt}
+          jobDescription={state.job.text}
+          onReady={(jobContext) => dispatch({ type: "JOB_ANALYZED", jobContext })}
+          onFailed={(code) => dispatch({ type: "JOB_ANALYSIS_FAILED", code })}
+        />
+      )}
+      {insight.status === "failed" && (
+        <JobInsightError
+          code={insight.code}
+          onRetry={() => dispatch({ type: "JOB_ANALYSIS_RETRIED" })}
+          onEdit={() => dispatch({ type: "JOB_EDIT_REQUESTED" })}
+        />
+      )}
+      {insight.status === "ready" && (
+        <>
+          <JobInsightView jobContext={insight.jobContext} />
+          <PhotoPicker onImageReady={(image) => dispatch({ type: "IMAGE_PREPARED", image })} />
+        </>
+      )}
+      <JobDescriptionSummary job={state.job} onEdit={() => dispatch({ type: "JOB_EDIT_REQUESTED" })} />
     </div>
   );
 }
@@ -55,7 +77,9 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
   const { m } = useI18n();
   switch (state.step) {
     case "draft":
-      return <DraftStep state={state} dispatch={dispatch} />;
+      return <JobDescriptionForm initialText={state.text} onSubmit={(job) => dispatch({ type: "JOB_SAVED", job })} />;
+    case "job-reviewed":
+      return <JobReviewedStep state={state} dispatch={dispatch} />;
     case "image-ready":
       return (
         <PhotoPreview image={state.image} onRemove={() => dispatch({ type: "IMAGE_DISCARDED" })}>

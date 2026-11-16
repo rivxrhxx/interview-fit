@@ -47,6 +47,7 @@ describe("buildReport", () => {
     const tampered: AnalysisResult = {
       ...result,
       jobContext: {
+        ...result.jobContext,
         summary: "Summary",
         cues: [{ id: "client-facing", label: "Client-facing work", evidence: "![pixel](https://track.example/p.png) <b>x</b>\n# Heading" }],
       },

@@ -4,6 +4,7 @@ import type { Messages } from "../lib/i18n";
 /** Ordered steps shown in the progress indicator (design.md UI state machine). */
 export const FLOW_STEPS = [
   "draft",
+  "job-reviewed",
   "image-ready",
   "consenting",
   "analyzing",

@@ -29,7 +29,7 @@ describe("AppShell state rendering", () => {
     renderShell("consenting");
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      `Step 3 of ${FLOW_STEPS.length}: ${STEP_META.consenting.label}`,
+      `Step 4 of ${FLOW_STEPS.length}: ${STEP_META.consenting.label}`,
     );
   });
 

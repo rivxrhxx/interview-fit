@@ -80,6 +80,7 @@ export function JobDescriptionForm({ initialText = "", onSubmit }: JobDescriptio
           </p>
         </div>
       </div>
+      <p className="meta send-notice">{m.job.sendNotice}</p>
       <div className="actions">
         <button type="submit" className="button button-primary">
           {m.job.save}

@@ -683,6 +683,122 @@ main:focus {
   color: var(--text-secondary);
 }
 
+/* Job analysis */
+.insight {
+  display: grid;
+  gap: 16px;
+}
+
+.insight .section-header {
+  margin-bottom: 0;
+}
+
+.insight-summary {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.insight-points {
+  margin: 0;
+}
+
+.insight-point {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.insight-point:last-child {
+  border-bottom: 0;
+}
+
+.insight-point dt {
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.insight-point dd {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.insight-value {
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.insight-quote {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.insight-empty {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.formality {
+  display: grid;
+  gap: 10px;
+}
+
+.formality-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.formality-scale {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--fill);
+  list-style: none;
+}
+
+.formality-scale li {
+  padding: 10px 4px;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.formality-scale li[aria-current="true"] {
+  color: var(--on-primary);
+  background: var(--primary-button);
+  font-weight: 700;
+}
+
+.send-notice {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .insight-point {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .formality-scale {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Suggestions */
 .suggestions {
   display: grid;

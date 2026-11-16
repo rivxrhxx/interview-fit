@@ -2,7 +2,11 @@ import { ERROR_MESSAGES, ERROR_POLICY, isErrorCode, type ApiError, type ApiError
 import { SUPPORTED_LOCALES } from "./locale.ts";
 import {
   ANALYSIS_JOB_ID_PATTERN,
+  FORMALITY_LEVELS,
+  JOB_ANALYSIS_SOURCES,
+  JOB_INSIGHT_FIELDS,
   JOB_STATES,
+  citableJobIds,
   OBSERVATION_ASSESSMENTS,
   OBSERVATION_CATEGORIES,
   TRY_ON_JOB_ID_PATTERN,
@@ -10,7 +14,10 @@ import {
   type AnalysisJob,
   type AnalysisJobId,
   type AnalysisResult,
+  type JobAnalysis,
+  type JobContext,
   type JobCue,
+  type JobInsightPoint,
   type JobState,
   type Observation,
   type Recommendation,
@@ -105,6 +112,48 @@ function parseCue(value: unknown, path: string): JobCue {
   };
 }
 
+function nullableString(value: unknown, path: string, maxLength = MAX_SHORT_TEXT): string | null {
+  return value === null ? null : string(value, path, maxLength);
+}
+
+function parsePoint(value: unknown, path: string): JobInsightPoint {
+  const source = record(value, path);
+  const point: JobInsightPoint = {
+    id: oneOf(source.id, JOB_INSIGHT_FIELDS, `${path}.id`),
+    value: nullableString(source.value, `${path}.value`),
+    evidence: nullableString(source.evidence, `${path}.evidence`, MAX_TEXT),
+  };
+  // A finding always comes with its quote; "not stated" has neither (R1.4).
+  if ((point.value === null) !== (point.evidence === null)) {
+    throw new ContractError(path, "value and evidence must both be present or both be null");
+  }
+  return point;
+}
+
+export function parseJobContext(value: unknown, path = "$.jobContext"): JobContext {
+  const source = record(value, path);
+  const points = list(source.points, `${path}.points`, parsePoint);
+  if (points.length !== JOB_INSIGHT_FIELDS.length || points.some((point, index) => point.id !== JOB_INSIGHT_FIELDS[index])) {
+    throw new ContractError(`${path}.points`, "expected one point per field in order");
+  }
+  return {
+    summary: string(source.summary, `${path}.summary`, MAX_TEXT),
+    source: oneOf(source.source, JOB_ANALYSIS_SOURCES, `${path}.source`),
+    formality: oneOf(source.formality, FORMALITY_LEVELS, `${path}.formality`),
+    points,
+    cues: list(source.cues, `${path}.cues`, parseCue),
+  };
+}
+
+export function parseJobAnalysis(value: unknown): JobAnalysis {
+  const source = record(value, "$");
+  return {
+    generatedAt: timestamp(source.generatedAt, "$.generatedAt"),
+    locale: oneOf(source.locale, SUPPORTED_LOCALES, "$.locale"),
+    jobContext: parseJobContext(source.jobContext),
+  };
+}
+
 function parseObservation(value: unknown, path: string): Observation {
   const source = record(value, path);
   return {
@@ -138,19 +187,15 @@ export function parseObservations(value: unknown, path = "$.observations"): Obse
 
 export function parseAnalysisResult(value: unknown, path = "$.result"): AnalysisResult {
   const source = record(value, path);
-  const context = record(source.jobContext, `${path}.jobContext`);
   const result: AnalysisResult = {
     generatedAt: timestamp(source.generatedAt, `${path}.generatedAt`),
     locale: source.locale === undefined ? "en" : oneOf(source.locale, SUPPORTED_LOCALES, `${path}.locale`),
-    jobContext: {
-      summary: string(context.summary, `${path}.jobContext.summary`, MAX_TEXT),
-      cues: list(context.cues, `${path}.jobContext.cues`, parseCue),
-    },
+    jobContext: parseJobContext(source.jobContext, `${path}.jobContext`),
     observations: list(source.observations, `${path}.observations`, parseObservation),
     recommendations: list(source.recommendations, `${path}.recommendations`, parseRecommendation),
   };
 
-  const cueIds = new Set(result.jobContext.cues.map((cue) => cue.id));
+  const cueIds = citableJobIds(result.jobContext);
   const observationIds = new Set(result.observations.map((observation) => observation.id));
   result.recommendations.forEach((recommendation, index) => {
     const where = `${path}.recommendations[${index}]`;

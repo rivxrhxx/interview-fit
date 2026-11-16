@@ -3,10 +3,10 @@
 // evidence), R5.2 (observation / adjustment / rationale separation), R5.3 (prohibited
 // claims), and prompt-injection attempts in job text (R1.3).
 import { describe, expect, it } from "vitest";
-import { parseAnalysisResult, passesContentPolicy, type Observation } from "../../../packages/contracts/src/index.ts";
+import { parseAnalysisResult, passesContentPolicy, type Observation, type Recommendation } from "../../../packages/contracts/src/index.ts";
 import { extractJobCues } from "../src/guidance/jobCues.ts";
-import { createPolicyGuidance, rulesGuidance } from "../src/guidance/engine.ts";
-import type { GuidanceEngine } from "../src/guidance.ts";
+import { filterRecommendations, suggestRules } from "../src/guidance/engine.ts";
+import { analyzeJobRules, checkJobContext } from "../src/guidance/jobAnalysis.ts";
 
 const OBSERVATIONS: Observation[] = [
   { id: "obs_clarity", category: "image-clarity", assessment: "ok", text: "The photo resolution (1280×720) is enough for a clear video preview." },
@@ -18,8 +18,9 @@ const OBSERVATIONS: Observation[] = [
 const CONSULTING_JD =
   "Senior consultant at a financial advisory firm. You will present findings to clients weekly. Interviews are held over video (Zoom).";
 
-function build(jobDescription: string, observations = OBSERVATIONS, engine: GuidanceEngine = createPolicyGuidance(rulesGuidance)) {
-  const output = engine.build(jobDescription, observations);
+function build(jobDescription: string, observations = OBSERVATIONS) {
+  const jobContext = analyzeJobRules(jobDescription, "en");
+  const output = { jobContext, recommendations: filterRecommendations(suggestRules(jobContext, observations, "en"), jobContext, observations) };
   // The result must satisfy the public contract, including cue and observation references.
   parseAnalysisResult({ generatedAt: "2026-11-16T09:00:00.000Z", observations, ...output });
   return output;
@@ -29,6 +30,7 @@ function allText(output: ReturnType<typeof build>): string[] {
   return [
     output.jobContext.summary,
     ...output.jobContext.cues.flatMap((cue) => [cue.label, cue.evidence]),
+    ...output.jobContext.points.flatMap((point) => [point.value ?? "", point.evidence ?? ""]),
     ...output.recommendations.flatMap((rec) => [rec.adjustment, rec.rationale]),
   ];
 }
@@ -68,7 +70,10 @@ describe("recommendations", () => {
 
   it("ties every suggestion to a job cue or to a capture observation, and cites cues in the rationale (R5.1)", () => {
     const { recommendations, jobContext } = build(CONSULTING_JD);
-    const labels = new Map(jobContext.cues.map((cue) => [cue.id, cue.label.toLowerCase()]));
+    const labels = new Map([
+      ...jobContext.cues.map((cue) => [cue.id, cue.label.toLowerCase()] as const),
+      ...jobContext.points.map((point) => [point.id, (point.value ?? "").toLowerCase()] as const),
+    ]);
 
     for (const rec of recommendations) {
       expect(rec.cueIds.length > 0 || rec.observationId !== null).toBe(true);
@@ -117,34 +122,25 @@ describe("prohibited claims (R5.3)", () => {
     for (const text of allText(build(jd))) expect(passesContentPolicy(text)).toBe(true);
   });
 
-  it("removes prohibited claims produced by any generator, including future model-based ones", () => {
-    const misbehaving: GuidanceEngine = {
-      build: () => ({
-        jobContext: { summary: "You are an attractive candidate who will be hired.", cues: [] },
-        recommendations: [
-          { id: "rec_bad", category: "attire", observationId: null, adjustment: "Consider hiding your acne.", rationale: "It hurts your chances of success.", cueIds: [] },
-          { id: "rec_ok", category: "lighting", observationId: "obs_lighting", adjustment: "Consider a soft front light.", rationale: "Even light helps people see you clearly on video.", cueIds: [] },
-        ],
-      }),
-    };
+  it("removes prohibited claims produced by any writer, including the AI provider", () => {
+    const jobContext = analyzeJobRules("Any role", "en");
+    const written: Recommendation[] = [
+      { id: "rec_bad", category: "attire", observationId: null, adjustment: "Consider hiding your acne.", rationale: "It hurts your chances of success.", cueIds: [] },
+      { id: "rec_ok", category: "lighting", observationId: "obs_lighting", adjustment: "Consider a soft front light.", rationale: "Even light helps people see you clearly on video.", cueIds: [] },
+    ];
 
-    const output = build("Any role", OBSERVATIONS, createPolicyGuidance(misbehaving));
-
-    expect(output.recommendations.map((rec) => rec.id)).toEqual(["rec_ok"]);
-    expect(passesContentPolicy(output.jobContext.summary)).toBe(true);
+    expect(filterRecommendations(written, jobContext, OBSERVATIONS).map((rec) => rec.id)).toEqual(["rec_ok"]);
+    const summary = checkJobContext({ ...jobContext, summary: "You are an attractive candidate who will be hired." }, "Any role", "en").summary;
+    expect(passesContentPolicy(summary)).toBe(true);
   });
 
-  it("drops recommendations that do not cite a cue or an observation", () => {
-    const uncited: GuidanceEngine = {
-      build: () => ({
-        jobContext: { summary: "No specific presentation cues were found in the job description.", cues: [] },
-        recommendations: [
-          { id: "rec_uncited", category: "attire", observationId: null, adjustment: "Consider a blazer.", rationale: "Blazers are a classic choice for many people.", cueIds: [] },
-        ],
-      }),
-    };
+  it("drops recommendations that do not cite a cue, a job-analysis point, or an observation", () => {
+    const jobContext = analyzeJobRules("Any role", "en");
+    const uncited: Recommendation[] = [
+      { id: "rec_uncited", category: "attire", observationId: null, adjustment: "Consider a blazer.", rationale: "Blazers are a classic choice for many people.", cueIds: ["dress-code", "made-up-cue"] },
+    ];
 
-    expect(build("Any role", OBSERVATIONS, createPolicyGuidance(uncited)).recommendations).toEqual([]);
+    expect(filterRecommendations(uncited, jobContext, OBSERVATIONS)).toEqual([]);
   });
 });
 
