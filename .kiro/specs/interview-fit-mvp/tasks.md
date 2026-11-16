@@ -104,3 +104,37 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
   - Requirements: R7.1, R7.2, R9.1, R9.2
   - Tests first: report sections in English and Korean, source photo and try-on image absent
   - Verify: `npm run verify` and a manual golden path against the live backend
+
+## Review fixes 2026-11-17
+
+From an external review before submission.
+
+- [ ] 13.1 Migrate Kiro hooks to the v1 format and record a live run
+  - Requirements: R9.3
+  - Tests first: harness verifier rejects legacy `.kiro.hook` files, unknown triggers, missing actions, and invalid matchers, and checks each matcher against sample paths
+  - Verify: `npm run verify:harness`, then a recorded hook run in Kiro (pending: needs the Kiro app)
+
+- [ ] 13.2 Make consent and error copy match the actual data flow
+  - Requirements: R3.5
+  - Tests first: consent step says no photo leaves before agreement; error step names Interview Fit; English and Korean
+  - Verify: `npm run verify:fast`
+
+- [ ] 13.3 Keep try-on results within the backend memory limit
+  - Requirements: R4.6
+  - Tests first: reservation refused before start, oversized result discarded, retained bytes never exceed the limit, one try-on in progress per analysis, global in-progress cap
+  - Verify: `npm run verify:fast`
+
+- [ ] 13.4 Cancel try-ons created before the desktop learned their ID
+  - Requirements: R4.5
+  - Tests first: repeated key returns the same job, DELETE by key before and after creation, connection closed before the response, desktop cancels by key on abort
+  - Verify: `npm run verify:fast`
+
+- [ ] 13.5 Delete the analysis result when a finished analysis is deleted
+  - Requirements: R4.7
+  - Tests first: GET after DELETE returns no result; try-on refused
+  - Verify: `npm run verify:fast`
+
+- [ ] 13.6 Keep the created hairstyle preview in the report after the try-on screen closes
+  - Requirements: R7.1, R7.3
+  - Tests first: close, reset, failed retry, and report back-and-forth keep the created style; start over clears it
+  - Verify: `npm run verify:fast`

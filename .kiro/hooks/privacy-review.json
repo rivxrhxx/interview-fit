@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Privacy boundary review",
+      "description": "After the agent saves a file on a privacy boundary (native code, backend, photo upload, capture, consent, job text, try-on, report, API and Tauri adapters, consent and policy contracts), review the diff for leaks and excessive permissions.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)(src-tauri/|services/proxy/|src/features/(analysis|capture|consent|job-posting|try-on|report)/|src/lib/(api|tauri|media)/|packages/contracts/src/(consent|policy)\\.ts$)",
+      "enabled": true,
+      "action": {
+        "type": "agent",
+        "prompt": "A privacy-sensitive file was just saved. Apply .kiro/prompts/privacy-review.md to the current diff (`git diff`). List release-blocking findings with file references, and do not make silent security tradeoffs."
+      }
+    }
+  ]
+}
