@@ -12,7 +12,8 @@ import {
   type ErrorCode,
 } from "../../../packages/contracts/src/index.ts";
 import type { ProxyConfig } from "./config.ts";
-import { observationOnlyGuidance, type GuidanceEngine } from "./guidance.ts";
+import type { GuidanceEngine } from "./guidance.ts";
+import { defaultGuidance } from "./guidance/engine.ts";
 import { BodyTooLargeError, parseMultipart, readBody } from "./http/body.ts";
 import { newCorrelationId } from "./ids.ts";
 import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
@@ -91,7 +92,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
   const jobs = createAnalysisJobs({
     store,
     provider: deps.provider,
-    guidance: deps.guidance ?? observationOnlyGuidance,
+    guidance: deps.guidance ?? defaultGuidance,
     logger,
     now,
     jobTtlMs: config.jobTtlMs,

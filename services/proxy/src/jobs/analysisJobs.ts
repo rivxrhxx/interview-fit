@@ -1,6 +1,7 @@
 import {
   ContractError,
   parseObservations,
+  passesContentPolicy,
   type AnalysisJobId,
   type ErrorCode,
 } from "../../../../packages/contracts/src/index.ts";
@@ -90,7 +91,12 @@ export function createAnalysisJobs(options: AnalysisJobsOptions): AnalysisJobs {
         options.providerTimeoutMs,
       );
       if (record.state !== "processing") return;
-      const observations = parseObservations(raw);
+      // Provider text is filtered by the same content policy as generated guidance (R5.3).
+      const parsed = parseObservations(raw);
+      const observations = parsed.filter((observation) => passesContentPolicy(observation.text));
+      if (observations.length < parsed.length) {
+        logger.log({ level: "warn", event: "policy_blocked_observations", count: parsed.length - observations.length });
+      }
       const { jobContext, recommendations } = guidance.build(record.jobDescription ?? "", observations);
       record.result = { generatedAt: new Date(now()).toISOString(), jobContext, observations, recommendations };
       finish(record, "succeeded", null);

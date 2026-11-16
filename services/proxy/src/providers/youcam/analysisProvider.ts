@@ -30,7 +30,7 @@ export function createYouCamAnalysisProvider(options: {
 
       if (outcome.status === "error") {
         const framing = FRAMING_ERRORS[outcome.code];
-        if (framing) return [...basics, { id: "obs_face_position", category: "framing", text: framing }];
+        if (framing) return [...basics, { id: "obs_face_position", category: "framing", assessment: "adjustable", text: framing }];
         throw new ProviderError(INVALID_IMAGE_ERRORS.has(outcome.code) ? "invalid-image" : "unavailable");
       }
 

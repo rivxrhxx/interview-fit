@@ -23,7 +23,12 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 export function simulatedObservations(image: ProviderImage): Observation[] {
   return [
     ...captureBasics(image),
-    { id: "obs_lighting", category: "lighting", text: "Front lighting could not be confirmed from this photo." },
+    {
+      id: "obs_lighting",
+      category: "lighting",
+      assessment: "adjustable",
+      text: "Front lighting could not be confirmed from this photo.",
+    },
   ];
 }
 
