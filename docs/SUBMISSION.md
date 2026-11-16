@@ -2,7 +2,7 @@
 
 ## Category
 
-Frankenstein — Tauri/Rust security boundary + React UX + webcam/photo capture + YouCam analysis/try-on + recommendation AI + Kiro engineering harness.
+Frankenstein — Tauri/Rust security boundary + React UX + webcam/photo capture + YouCam photo-quality, skin-prep, and hairstyle try-on + Claude job analysis and suggestions behind a deterministic rules fallback + Kiro engineering harness.
 
 ## Public evidence to preserve
 
@@ -27,7 +27,7 @@ Frankenstein — Tauri/Rust security boundary + React UX + webcam/photo capture 
 
 ## Do not publish
 
-- API credentials or authorization headers.
+- API credentials or authorization headers (YouCam or Anthropic).
 - Raw user photos or derived face data.
 - Private provider responses, IDs, URLs, or logs.
 - Unlicensed assets.

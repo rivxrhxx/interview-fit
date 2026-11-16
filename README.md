@@ -1,20 +1,21 @@
 # Interview Fit
 
-Interview Fit is a privacy-first Tauri desktop app that combines job-posting analysis, neutral interview-presentation coaching, and one virtual try-on.
+Interview Fit is a privacy-first Tauri desktop app that combines a job and company-atmosphere analysis, YouCam photo-quality and skin-prep analysis, AI interview-style suggestions, and a curated hairstyle try-on.
 
 This repository is prepared for the **Kiroween 2026 Frankenstein category**. The committed `.kiro/` directory is the development harness and the source of truth for product rules, architecture, implementation tasks, privacy constraints, and verification.
 
 ## What it does
 
-1. Paste a job description. It is treated as plain text and is never interpreted as instructions.
-2. Choose a photo or use the camera. The image is validated, rotated upright, and re-encoded without location or camera metadata on the device.
-3. Read and agree to just-in-time consent. Nothing is uploaded before that.
-4. The Interview Fit backend analyzes the photo through a normalized contract (deterministic simulator or YouCam).
-5. Review neutral lighting, framing, and clarity observations, plus optional suggestions tied to explicit cues in the job description.
-6. Preview one curated interview style (navy blazer) side by side with the original, then reset.
-7. Export a text report. It never contains the photo.
+1. Paste a job posting. It is treated as plain text and is never interpreted as instructions.
+2. Review the job analysis: role, industry, workplace atmosphere, interview format, and dress code, each with a quote from the posting or marked as not stated, plus a suggested dress formality. Only text is sent at this step, and the app says so before sending.
+3. Upload a selfie or use the camera. The image is validated, rotated upright, scaled to at most 1024 px on the long side, and re-encoded without location or camera metadata on the device.
+4. Read and agree to just-in-time consent. Nothing image-related is uploaded before that.
+5. The backend runs YouCam photo-quality and skin analysis. Skin results become optional lighting and grooming-prep tips; no scores, skin age, or condition names leave the backend.
+6. Review neutral observations and optional suggestions for lighting, framing, background, attire, grooming, and hair, each tied to the posting. With an Anthropic key, Claude writes the analysis and suggestions; every AI answer passes the same evidence and content checks as the deterministic rules engine, which answers whenever Claude is unavailable.
+7. Pick one of six curated interview hairstyles (styles that suit the posting are marked; nothing is guessed from the photo), preview it with YouCam keeping your own hair color, compare it side by side with the original, and try another.
+8. Export a text report. It never contains the photo or the preview.
 
-Interview Fit does not diagnose, score appearance, infer personality, emotion, or protected traits, or predict hiring outcomes. A shared content policy enforces this on the backend and again in the desktop app.
+Interview Fit does not diagnose health or skin conditions, show skin scores, score appearance, infer gender, personality, emotion, or protected traits, or predict hiring outcomes. A shared content policy enforces this on the backend and again in the desktop app.
 
 ## Architecture
 
@@ -26,7 +27,9 @@ React UI (src/)                    feature modules, explicit state machine
   └─ typed API client ─────────────► Interview Fit backend (services/proxy/)
                                        re-validation, consent check, rate limit, CORS allowlist
                                        ├─ simulator provider (deterministic demo)
-                                       └─ YouCam adapter (face_quality + cloth-v4 try-on)
+                                       ├─ YouCam adapter (face_quality, skin-prep tips, hair-transfer try-on)
+                                       └─ Claude adapter (job analysis and suggestions, text only)
+                                          → checked by the content policy, rules engine as fallback
 Shared contracts (packages/contracts/)  types, runtime parsers, error codes, content policy, fixtures
 ```
 
@@ -45,7 +48,7 @@ npm run demo:photo     # optional: writes demo-assets/synthetic-portrait.png
 
 Demo failure paths: `SIMULATOR_SCENARIO=timeout npm run proxy` (also `unavailable`, `rate-limited`, `malformed`). See `docs/DEMO.md` for the three-minute walkthrough.
 
-To use YouCam instead of the simulator, configure the backend environment as described in `services/proxy/README.md`. Never put provider keys in the desktop project.
+To use YouCam instead of the simulator, put `YOUCAM_API_KEY` (and optionally `ANTHROPIC_API_KEY` for Claude) in the git-ignored `services/proxy/.env` and run `npm run proxy:youcam`. See `services/proxy/README.md`. Never put provider keys in the desktop project.
 
 ## Commands
 
@@ -84,4 +87,4 @@ scripts/                 harness verifier, repository scan, demo photo generator
 
 ## Privacy boundary
 
-Images and image-derived data are sensitive personal data. They stay in memory on the device, are uploaded only after explicit consent, and are held by the backend only temporarily: they are deleted on cancel, failure, start-over, or expiry (15 minutes by default). Results are written to disk only when the user explicitly saves a report, and the report contains no image data. The image provider's own retention terms apply to its processing.
+Images and image-derived data are sensitive personal data. They stay in memory on the device, are uploaded only after explicit consent, and are held by the backend only temporarily: they are deleted on cancel, failure, start-over, or expiry (15 minutes by default). The AI provider receives the posting and neutral observation sentences only, never the photo or provider scores. Results are written to disk only when the user explicitly saves a report, and the report contains no image data. The providers' own retention terms apply to their processing.
