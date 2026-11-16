@@ -118,7 +118,22 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       form.set(ANALYSIS_REQUEST_FIELDS.jobDescription, input.jobDescription);
       form.set(ANALYSIS_REQUEST_FIELDS.image, input.image, "photo.jpg");
       const headers = { "Idempotency-Key": crypto.randomUUID() };
-      return request(API_ROUTES.analysisJobs, { method: "POST", body: form, headers, signal }, parseAnalysisJob, 1);
+      return request(API_ROUTES.analysisJobs, { method: "POST", body: form, headers, signal }, parseAnalysisJob, 1).catch(
+        async (error: unknown) => {
+          // Cancelled or lost before the job ID arrived: the backend may still have the
+          // upload, so cancel it by key (never creates anything) before giving up (R4.4).
+          const unknownOutcome =
+            isAbort(error) || (error instanceof ApiRequestError && error.code === "PROCESSING_UNAVAILABLE");
+          if (unknownOutcome) {
+            await fetchImpl(`${options.baseUrl}${API_ROUTES.analysisJobs}`, {
+              ...REQUEST_DEFAULTS,
+              method: "DELETE",
+              headers,
+            }).catch(() => undefined);
+          }
+          throw error;
+        },
+      );
     },
 
     getAnalysisJob(id, signal) {
