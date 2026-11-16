@@ -1,4 +1,5 @@
 import type { Observation } from "../../../../packages/contracts/src/index.ts";
+import { captureBasics } from "./captureBasics.ts";
 import { ProviderError, type AnalysisProvider, type ProviderImage } from "./types.ts";
 
 export type SimulatorScenario = "success" | "timeout" | "unavailable" | "rate-limited" | "malformed";
@@ -18,33 +19,11 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-/** Deterministic observations derived only from image dimensions (R9.2 demo fixtures). */
+/** Deterministic observations for demos and tests (R9.2). */
 export function simulatedObservations(image: ProviderImage): Observation[] {
-  const { width, height } = image;
-  const megapixels = (width * height) / 1_000_000;
-  const orientation = width > height ? "landscape" : width < height ? "portrait" : "square";
   return [
-    {
-      id: "obs_clarity",
-      category: "image-clarity",
-      text:
-        megapixels >= 0.9
-          ? `The photo resolution (${width}×${height}) is enough for a clear video preview.`
-          : `The photo resolution (${width}×${height}) is lower than a typical HD video frame.`,
-    },
-    {
-      id: "obs_framing",
-      category: "framing",
-      text:
-        orientation === "landscape"
-          ? "The photo is in landscape orientation, like a typical video call frame."
-          : `The photo is in ${orientation} orientation, while video calls usually show a landscape frame.`,
-    },
-    {
-      id: "obs_lighting",
-      category: "lighting",
-      text: "Front lighting could not be confirmed from this photo.",
-    },
+    ...captureBasics(image),
+    { id: "obs_lighting", category: "lighting", text: "Front lighting could not be confirmed from this photo." },
   ];
 }
 

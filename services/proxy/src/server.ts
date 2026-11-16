@@ -25,6 +25,9 @@ import { createRateLimiter } from "./rateLimit.ts";
 /** Upload limit plus room for the job description and multipart framing. */
 const MAX_BODY_BYTES = IMAGE_MAX_BYTES + 128 * 1024;
 
+/** Client-generated retry key; a repeat within the job's lifetime returns the same job. */
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
+
 export interface ProxyDeps {
   config: ProxyConfig;
   provider: AnalysisProvider;
@@ -96,6 +99,13 @@ export function createProxy(deps: ProxyDeps): Proxy {
     providerTimeoutMs: config.providerTimeoutMs,
   });
   const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
+  const idempotency = new Map<string, string>();
+
+  function idempotencyKey(request: IncomingMessage): string | null {
+    const header = request.headers["idempotency-key"];
+    const key = Array.isArray(header) ? header[0] : header;
+    return key && IDEMPOTENCY_KEY.test(key) ? `${request.socket.remoteAddress ?? "unknown"}|${key}` : null;
+  }
   const allowedOrigins = new Set(config.allowedOrigins);
 
   function send(response: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -134,6 +144,14 @@ export function createProxy(deps: ProxyDeps): Proxy {
   }
 
   async function createJob(request: IncomingMessage): Promise<AnalysisJobRecord> {
+    const key = idempotencyKey(request);
+    const existing = key ? store.get(idempotency.get(key) ?? "") : undefined;
+    if (key && existing) {
+      // A retried request: never create a second job or a second provider call.
+      request.resume();
+      return existing;
+    }
+
     const decision = limiter.take(request.socket.remoteAddress ?? "unknown");
     if (!decision.allowed) {
       request.resume();
@@ -171,7 +189,9 @@ export function createProxy(deps: ProxyDeps): Proxy {
     image.fill(0);
     if (!clean) throw new HttpError("IMAGE_INVALID");
 
-    return jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info });
+    const record = jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info });
+    if (key) idempotency.set(key, record.id);
+    return record;
   }
 
   async function route(request: IncomingMessage, response: ServerResponse, cors: Record<string, string>) {
@@ -225,7 +245,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
         response.writeHead(204, {
           ...cors,
           "Access-Control-Allow-Methods": "GET, POST, DELETE",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers": "Content-Type, Idempotency-Key",
           "Access-Control-Max-Age": "600",
         });
         response.end();
@@ -256,6 +276,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
       ? setInterval(() => {
           store.sweep();
           limiter.prune();
+          for (const [key, id] of idempotency) if (!store.peek(id)) idempotency.delete(key);
         }, config.sweepIntervalMs)
       : undefined;
   sweeper?.unref();
