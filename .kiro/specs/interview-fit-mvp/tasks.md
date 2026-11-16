@@ -114,7 +114,7 @@ From an external review before submission.
   - Tests first: harness verifier rejects legacy `.kiro.hook` files, unknown triggers, missing actions, and invalid matchers, and checks each matcher against sample paths
   - Verify: `npm run verify:harness`, then a recorded hook run in Kiro (pending: needs the Kiro app)
 
-- [ ] 13.2 Make consent and error copy match the actual data flow
+- [x] 13.2 Make consent and error copy match the actual data flow
   - Requirements: R3.5
   - Tests first: consent step says no photo leaves before agreement; error step names Interview Fit; English and Korean
   - Verify: `npm run verify:fast`

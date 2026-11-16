@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { JPEG_SIGNATURE, syntheticFile } from "../../test/images";
 import { spyOnNetwork } from "../../test/network";
 import { renderApp } from "../../test/renderApp";
+import { en } from "../../lib/i18n/messages/en";
+import { ko } from "../../lib/i18n/messages/ko";
 import { ConsentGate } from "./ConsentGate";
 import { CONSENT_VERSION, createConsentRecord, isConsentCurrent } from "./consent";
 
@@ -136,5 +138,43 @@ describe("consent gate in the flow", () => {
     await user.click(await screen.findByRole("button", { name: "Use this photo" }));
 
     expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
+});
+
+describe("copy matches what has actually left the device (R3.5)", () => {
+  it("says only the photo is held back, because the posting was already sent for job analysis", async () => {
+    const user = userEvent.setup();
+    const { adapters } = renderApp();
+
+    await reachConsentStep(user);
+
+    expect(adapters.api.analyzeJob).toHaveBeenCalled();
+    expect(screen.getByText("No photo leaves your device until you agree below.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing leaves your device/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["en", en, "No photo leaves your device until you agree below.", "Nothing was saved by Interview Fit."],
+    ["ko", ko, "아래에서 동의하기 전까지 사진은 기기 밖으로 나가지 않아요.", "Interview Fit은 아무것도 저장하지 않았어요."],
+  ] as const)("%s: consent names the photo and the error names who saved nothing", (_locale, messages, consent, error) => {
+    expect(messages.steps.consenting.description).toBe(consent);
+    expect(messages.steps.error.description.startsWith(error)).toBe(true);
+  });
+
+  it.each([
+    ["en", en],
+    ["ko", ko],
+  ] as const)("%s: no copy claims that nothing at all leaves the device", (_locale, messages) => {
+    const all: string[] = [];
+    const collect = (value: unknown) => {
+      if (typeof value === "string") all.push(value);
+      else if (value && typeof value === "object") Object.values(value).forEach(collect);
+    };
+    collect(messages);
+
+    for (const text of all) {
+      expect(text).not.toMatch(/nothing (leaves|is sent|goes)|아무것도[^.]*(기기 밖|전송|보내|나가)/i);
+      expect(text).not.toMatch(/^(Nothing was saved\.|저장된 건 없어요)/);
+    }
   });
 });

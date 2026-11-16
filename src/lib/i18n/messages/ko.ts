@@ -32,7 +32,7 @@ export const ko: Messages = {
     consenting: {
       label: "동의",
       heading: "사진이 어떻게 쓰이는지 확인해 주세요",
-      description: "동의하기 전에는 아무것도 기기 밖으로 나가지 않아요.",
+      description: "아래에서 동의하기 전까지 사진은 기기 밖으로 나가지 않아요.",
     },
     analyzing: {
       label: "분석",
@@ -57,7 +57,7 @@ export const ko: Messages = {
     error: {
       label: "중단됨",
       heading: "이 단계를 마치지 못했어요",
-      description: "저장된 건 없어요. 어떻게 이어갈지 골라 주세요.",
+      description: "Interview Fit은 아무것도 저장하지 않았어요. 어떻게 이어갈지 골라 주세요.",
     },
   },
   errors: {
