@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useAdapters } from "../../lib/adapters";
 import { useI18n } from "../../lib/i18n";
-import type { AnalysisResult } from "../../lib/api/contracts";
+import type { AnalysisResult, TryOnStyleId } from "../../lib/api/contracts";
 import { buildReport, reportFileName, type TryOnReportStatus } from "./buildReport";
 
 interface ReportStepProps {
   result: AnalysisResult;
   tryOn: TryOnReportStatus;
+  tryOnStyleId?: TryOnStyleId | null;
   generatedAt: string;
   onBack: () => void;
   onStartOver: () => void;
@@ -14,14 +15,14 @@ interface ReportStepProps {
 
 type SaveState = { status: "idle" } | { status: "saving" } | { status: "saved" } | { status: "cancelled" } | { status: "failed" };
 
-export function ReportStep({ result, tryOn, generatedAt, onBack, onStartOver }: ReportStepProps) {
+export function ReportStep({ result, tryOn, tryOnStyleId = null, generatedAt, onBack, onStartOver }: ReportStepProps) {
   const { report: exporter } = useAdapters();
   const { m, locale } = useI18n();
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const date = useMemo(() => new Date(generatedAt), [generatedAt]);
   const contents = useMemo(
-    () => buildReport({ result, tryOn, generatedAt: date, locale }),
-    [result, tryOn, date, locale],
+    () => buildReport({ result, tryOn, tryOnStyleId, generatedAt: date, locale }),
+    [result, tryOn, tryOnStyleId, date, locale],
   );
 
   async function handleSave() {

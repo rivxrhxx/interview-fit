@@ -95,7 +95,7 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
   - Tests first: exactly four concerns requested, scores never leave the backend, framing errors keep other observations, Korean and English text pass the policy, consent version change, Rust resize
   - Verify: `npm run verify:fast` and `npm run verify:rust`
 
-- [ ] 12.5 Replace the blazer try-on with the curated hairstyle try-on
+- [x] 12.5 Replace the blazer try-on with the curated hairstyle try-on
   - Requirements: R6.1, R6.2, R6.3, R6.4
   - Tests first: only curated template IDs accepted, `hair_color: "src"`, thumbnails proxied, suggested styles come from job cues only, compare/reset/cancel, no persistence
   - Verify: `npm run verify:fast`

@@ -9,7 +9,7 @@ export const FAKE_FILE_ID = "yc-file-7f3a9c";
 export const FAKE_TASK_ID = "yc-task-b41d2e";
 export const FAKE_UPLOAD_URL = `https://upload.youcam-storage.test/put/${FAKE_FILE_ID}?signature=sig-91ab`;
 export const FAKE_RESULT_URL = "https://results.youcam-storage.test/out/yc-result-55e1.jpg?signature=sig-77cd";
-export const FAKE_REF_URL = "https://assets.interview-fit.test/garments/navy-blazer.png";
+export const FAKE_THUMB_BASE = "https://cdn.youcam-storage.test/thumbs";
 
 export interface RecordedRequest {
   method: string;
@@ -32,9 +32,13 @@ export interface FakeYouCamOptions {
   skinPollReplies?: Reply[];
   /** Raw bytes (or failure) served at the result URL. */
   resultReply?: { status: number; bytes: Uint8Array; contentType?: string } | "network-error";
+  /** Template list pages for hair-transfer, served in order through `next_token`. */
+  templatePages?: Array<Array<{ id: string; thumb: string }>>;
+  /** Raw bytes served at any thumbnail URL. */
+  thumbBytes?: Uint8Array;
 }
 
-export function clothSuccess(url = FAKE_RESULT_URL) {
+export function hairSuccess(url = FAKE_RESULT_URL) {
   return { status: 200, data: { task_status: "success", error: null, results: { url } } };
 }
 
@@ -125,9 +129,25 @@ export function fakeYouCam(options: FakeYouCamOptions = {}) {
       );
     }
     if (method === "PUT" && url === FAKE_UPLOAD_URL) return respond(options.uploadReply ?? { status: 200 });
-    const tool = /\/s2s\/v2\.0\/task\/(face-attr-analysis|cloth-v4|skin-analysis)(\/|$)/.exec(url)?.[1];
+    const templateList = new RegExp(`^${FAKE_BASE_URL}/s2s/v2\\.1/task/template/hair-transfer\\?(.*)$`).exec(url);
+    if (method === "GET" && templateList) {
+      const pages = options.templatePages ?? [[]];
+      const query = new URLSearchParams(templateList[1]);
+      const index = Number(query.get("starting_token") ?? "0");
+      const next = index + 1 < pages.length ? String(index + 1) : null;
+      return respond({ status: 200, body: { status: 200, data: { templates: pages[index] ?? [], next_token: next } } });
+    }
+    if (method === "GET" && url.startsWith(`${FAKE_THUMB_BASE}/`)) {
+      return new Response((options.thumbBytes ?? new Uint8Array([0xff, 0xd8, 0xff, 0xd9])) as Uint8Array<ArrayBuffer>, {
+        status: 200,
+        headers: { "Content-Type": "image/jpeg" },
+      });
+    }
+    const match = /\/s2s\/(v2\.[01])\/task\/(face-attr-analysis|hair-transfer|skin-analysis)(\/|$)/.exec(url);
+    const version = match?.[1];
+    const tool = match?.[2];
     const created = { status: 200, body: { status: 200, data: { task_id: FAKE_TASK_ID } } };
-    if (method === "POST" && tool && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}`) {
+    if (method === "POST" && tool && url === `${FAKE_BASE_URL}/s2s/${version}/task/${tool}`) {
       return respond((tool === "skin-analysis" ? options.skinCreateReply : options.createReply) ?? created);
     }
     if (method === "GET" && tool === "skin-analysis" && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}/${FAKE_TASK_ID}`) {
@@ -143,7 +163,7 @@ export function fakeYouCam(options: FakeYouCamOptions = {}) {
         headers: { "Content-Type": reply.contentType ?? "image/jpeg" },
       });
     }
-    if (method === "GET" && tool && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}/${FAKE_TASK_ID}`) {
+    if (method === "GET" && tool && url === `${FAKE_BASE_URL}/s2s/${version}/task/${tool}/${FAKE_TASK_ID}`) {
       const reply = pollReplies[Math.min(polls, pollReplies.length - 1)];
       polls += 1;
       return respond(reply === "network-error" ? reply : { status: (reply as { status: number }).status, body: reply });

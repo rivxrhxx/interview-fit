@@ -96,7 +96,7 @@ describe("desktop try-on ↔ proxy (simulator)", () => {
     const outcome = await runTryOn({
       api,
       analysisJobId: analysis.jobId,
-      styleId: "navy-blazer",
+      styleId: "neat-updo",
       signal: new AbortController().signal,
       pollIntervalMs: 10,
       timeoutMs: 2_000,

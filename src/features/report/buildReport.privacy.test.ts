@@ -9,7 +9,7 @@ const result = parseAnalysisJob(succeededFixture).result as AnalysisResult;
 const generatedAt = new Date("2026-11-16T09:30:00.000Z");
 
 function report(overrides: Partial<Parameters<typeof buildReport>[0]> = {}) {
-  return buildReport({ result, tryOn: "created", generatedAt, ...overrides });
+  return buildReport({ result, tryOn: "created", tryOnStyleId: "neat-updo", generatedAt, ...overrides });
 }
 
 describe("buildReport", () => {
@@ -24,15 +24,20 @@ describe("buildReport", () => {
     expect(text).toContain("- What we noticed: ");
     expect(text).toContain("- Optional adjustment: ");
     expect(text).toContain("- Why: ");
-    expect(text).toContain("## Virtual try\\-on");
-    expect(text).toContain("Status: A navy blazer preview was created during this session. It is not included in this report.");
+    expect(text).toContain("- Industry: Consulting");
+    expect(text).toContain("- Dress code: Not stated in the posting");
+    expect(text).toContain("- Suggested dress formality: Business casual");
+    expect(text).toContain("## What the photo shows");
+    expect(text).toContain("- Lighting: The light source appears to be behind you. (Could be adjusted)");
+    expect(text).toContain("## Hairstyle try\\-on");
+    expect(text).toContain("Status: A neat updo hairstyle preview was created during this session. It is not included in this report.");
     expect(text).toContain("## Privacy");
     expect(text).toContain("This report contains text only. It does not include your photo, the try\\-on preview, or any image data.");
   });
 
   it.each([
-    ["not-created", "Status: No try\\-on preview was created."],
-    ["unavailable", "Status: A try\\-on preview could not be created."],
+    ["not-created", "Status: No hairstyle preview was created."],
+    ["unavailable", "Status: A hairstyle preview could not be created."],
   ] as const)("reports try-on status %s", (tryOn, line) => {
     expect(report({ tryOn })).toContain(line);
   });

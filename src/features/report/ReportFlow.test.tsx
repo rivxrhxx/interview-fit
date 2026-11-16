@@ -48,13 +48,13 @@ describe("report step", () => {
     const user = userEvent.setup();
     renderApp(adapters);
     await reachGuidance(user);
-    await user.click(screen.getByRole("button", { name: "Preview interview attire" }));
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
-    await screen.findByRole("img", { name: "Navy blazer preview" });
+    await user.click(screen.getByRole("button", { name: "Preview a hairstyle" }));
+    await user.click(screen.getByRole("button", { name: "Preview Sleek middle part" }));
+    await screen.findByRole("img", { name: "Sleek middle part preview" });
 
     await user.click(screen.getByRole("button", { name: "Continue to report" }));
 
-    expect(screen.getByText(/A navy blazer preview was created during this session/)).toBeInTheDocument();
+    expect(screen.getByText(/A sleek middle part hairstyle preview was created during this session/)).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 

@@ -6,4 +6,6 @@ export const API_ROUTES = {
   tryOnJobs: "/v1/try-on-jobs",
   tryOnJob: (id: string) => `/v1/try-on-jobs/${encodeURIComponent(id)}`,
   tryOnResult: (id: string) => `/v1/try-on-jobs/${encodeURIComponent(id)}/result`,
+  /** Preview image of a curated style, served by the backend so the desktop never loads vendor URLs. */
+  tryOnStyleThumbnail: (styleId: string) => `/v1/try-on-styles/${encodeURIComponent(styleId)}/thumbnail`,
 } as const;

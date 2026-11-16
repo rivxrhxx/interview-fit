@@ -32,6 +32,8 @@ interface Copy {
   /** Skin-prep tips keyed by concern; each adjustable concern gets its own suggestion. */
   prepTips: Record<string, Tip>;
   attire: Record<AttireKind, { adjustment: string; setting: string }>;
+  /** Hair direction by formality; it points to the curated hairstyle preview. */
+  hair: Record<"polished" | "natural", { adjustment: string; setting: string }>;
   /** Rationale for attire: what the posting says, then the setting. */
   attireRationale: (mention: string, setting: string) => string;
 }
@@ -97,6 +99,16 @@ const COPY: Record<Locale, Copy> = {
         setting: "where smart-casual clothing is common",
       },
     },
+    hair: {
+      polished: {
+        adjustment: "Consider a neat hairstyle that keeps your face clearly visible; you can preview curated styles in the next step.",
+        setting: "where a polished look is common",
+      },
+      natural: {
+        adjustment: "Consider a tidy, natural hairstyle that feels like you; you can preview curated styles in the next step.",
+        setting: "where a natural look is common",
+      },
+    },
     attireRationale: (mention, setting) => `The posting mentions ${mention}, ${setting}.`,
   },
   ko: {
@@ -156,6 +168,16 @@ const COPY: Record<Locale, Copy> = {
       casual: {
         adjustment: "깔끔하고 편안한 스마트 캐주얼을 고려해 보세요. 정장까지는 필요 없는 경우가 많아요.",
         setting: "이런 환경에서는 스마트 캐주얼이 흔해요",
+      },
+    },
+    hair: {
+      polished: {
+        adjustment: "얼굴이 잘 보이도록 단정하게 정리한 헤어스타일을 고려해 보세요. 다음 단계에서 추천 스타일을 미리 볼 수 있어요.",
+        setting: "이런 환경에서는 단정한 스타일이 흔해요",
+      },
+      natural: {
+        adjustment: "깔끔하고 자연스러운, 나다운 헤어스타일을 고려해 보세요. 다음 단계에서 추천 스타일을 미리 볼 수 있어요.",
+        setting: "이런 환경에서는 자연스러운 스타일이 흔해요",
       },
     },
     attireRationale: (mention, setting) => `공고에서 ${mention} 내용을 확인했어요. ${setting}.`,
@@ -247,13 +269,22 @@ export function suggestRules(context: JobContext, observations: Observation[], l
       .slice(0, 1);
     const cited = dressCode ? [dressCode] : cueCitations.length > 0 ? cueCitations.slice(0, 2) : fallback;
     if (cited.length > 0) {
-      const { adjustment, setting } = copy.attire[kind];
+      const attire = copy.attire[kind];
       recommendations.push({
         id: "rec_attire",
         category: "attire",
         observationId: null,
-        adjustment,
-        rationale: copy.attireRationale(mention(cited), setting),
+        adjustment: attire.adjustment,
+        rationale: copy.attireRationale(mention(cited), attire.setting),
+        cueIds: cited.map((item) => item.id),
+      });
+      const hair = copy.hair[kind === "formal" || kind === "business-casual" ? "polished" : "natural"];
+      recommendations.push({
+        id: "rec_hair",
+        category: "hair",
+        observationId: null,
+        adjustment: hair.adjustment,
+        rationale: copy.attireRationale(mention(cited), hair.setting),
         cueIds: cited.map((item) => item.id),
       });
     }

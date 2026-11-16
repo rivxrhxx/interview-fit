@@ -170,12 +170,12 @@ describe("try-on endpoints", () => {
   it("posts the curated style for a consented analysis job as JSON", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ...tryOnSucceeded, state: "queued" }, 202));
 
-    const job = await clientWith(fetchMock).createTryOnJob({ analysisJobId: JOB_ID, styleId: "navy-blazer" });
+    const job = await clientWith(fetchMock).createTryOnJob({ analysisJobId: JOB_ID, styleId: "neat-updo" });
 
-    expect(job.styleId).toBe("navy-blazer");
+    expect(job.styleId).toBe("neat-updo");
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`${BASE}/v1/try-on-jobs`);
-    expect(JSON.parse(init.body as string)).toEqual({ analysisJobId: JOB_ID, styleId: "navy-blazer" });
+    expect(JSON.parse(init.body as string)).toEqual({ analysisJobId: JOB_ID, styleId: "neat-updo" });
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
   });
 

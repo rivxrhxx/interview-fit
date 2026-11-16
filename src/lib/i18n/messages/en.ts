@@ -5,6 +5,7 @@ import {
   type JobInsightField,
   type ObservationCategory,
   type Recovery,
+  type TryOnStyleId,
 } from "../../api/contracts";
 
 type StepCopy = { label: string; heading: string; description: string };
@@ -54,9 +55,9 @@ export const en = {
       description: "Optional suggestions based on your photo and the job description.",
     },
     "trying-on": {
-      label: "Try-on",
-      heading: "Preview interview attire",
-      description: "One curated style, shown next to your original photo.",
+      label: "Hair try-on",
+      heading: "Preview an interview hairstyle",
+      description: "Pick a curated style and compare it with your original photo. Your own hair color is kept.",
     },
     "report-ready": {
       label: "Report",
@@ -208,6 +209,7 @@ export const en = {
     "image-clarity": "Image clarity",
     "skin-prep": "Skin prep",
     attire: "Attire",
+    hair: "Hair",
   } as Record<ObservationCategory, string>,
   review: {
     title: "What the photo shows",
@@ -229,23 +231,29 @@ export const en = {
     fromJob: "From the job description",
   },
   reviewed: {
-    tryOn: "Preview interview attire",
+    tryOn: "Preview a hairstyle",
     report: "Create report",
     startOver: "Start over",
   },
   tryOn: {
-    regionLabel: "Curated style",
-    eyebrow: "Curated style",
-    style: {
-      label: "Navy blazer",
-      description: "A classic single-breasted navy blazer, a common choice for business interviews.",
-    },
+    pickerLabel: "Curated hairstyles",
+    pickerHint: "Styles suggested for the posting's atmosphere are marked. You choose; nothing is guessed from your photo.",
+    suggested: "Suits the posting",
+    styles: {
+      "sleek-middle-part": { label: "Sleek middle part", description: "Smooth and parted in the middle, kept away from the face." },
+      "neat-updo": { label: "Neat updo", description: "Gathered up and back for a clear, tidy look." },
+      "side-swept-cut": { label: "Side-swept cut", description: "Short sides with the top swept to one side." },
+      "side-part-straight": { label: "Side-part straight", description: "Straight hair with a soft side part." },
+      "short-bob": { label: "Short bob", description: "A chin-length bob with a clean line." },
+      "textured-comma": { label: "Textured comma", description: "A short, natural cut with a soft curved fringe." },
+    } as Record<TryOnStyleId, { label: string; description: string }>,
+    selected: "(selected)",
     notSaved: "The preview is not saved. Only an explicit export creates a file.",
-    generate: "Generate preview",
+    generate: (label: string) => `Preview ${label}`,
     retry: "Try again",
     cancel: "Cancel preview",
     continue: "Continue to report",
-    reset: "Reset preview",
+    reset: "Try another style",
     back: "Back to guidance",
     original: "Original",
     previewCaption: (label: string) => `Preview: ${label}`,
@@ -271,12 +279,12 @@ export const en = {
       guidance: "Presentation guidance",
       optional: "These suggestions are optional.",
       noRecommendations: "No adjustments were suggested for this photo and job description.",
-      tryOn: "Virtual try-on",
       status: "Status",
+      tryOn: "Hairstyle try-on",
       tryOnStatus: {
-        created: "A navy blazer preview was created during this session. It is not included in this report.",
-        "not-created": "No try-on preview was created.",
-        unavailable: "A try-on preview could not be created.",
+        created: (label: string) => `A ${label.toLowerCase()} hairstyle preview was created during this session. It is not included in this report.`,
+        "not-created": () => "No hairstyle preview was created.",
+        unavailable: () => "A hairstyle preview could not be created.",
       },
       privacy: "Privacy",
       privacyLines: [

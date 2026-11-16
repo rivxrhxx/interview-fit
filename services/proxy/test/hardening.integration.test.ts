@@ -28,7 +28,10 @@ afterEach(async () => {
   proxy = undefined;
 });
 
-const tryOnProvider: TryOnProvider = { tryOn: async () => ({ bytes: syntheticJpeg(320, 240, 32), mimeType: "image/jpeg" }) };
+const tryOnProvider: TryOnProvider = {
+  tryOn: async () => ({ bytes: syntheticJpeg(320, 240, 32), mimeType: "image/jpeg" }),
+  thumbnail: async () => ({ bytes: syntheticJpeg(160, 160, 32), mimeType: "image/jpeg" }),
+};
 
 async function succeededAnalysis(target: TestProxy): Promise<string> {
   const created = parseAnalysisJob(await (await postAnalysis(target)).json());
@@ -43,7 +46,7 @@ async function finishedTryOn(target: TestProxy, analysisJobId: string): Promise<
   const response = await fetch(`${target.baseUrl}/v1/try-on-jobs`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: DESKTOP_ORIGIN },
-    body: JSON.stringify({ analysisJobId, styleId: "navy-blazer" }),
+    body: JSON.stringify({ analysisJobId, styleId: "neat-updo" }),
   });
   const id = parseTryOnJob(await response.json()).id;
   await waitFor(async () => {

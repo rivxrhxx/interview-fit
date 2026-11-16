@@ -18,7 +18,7 @@ export const TERMINAL_JOB_STATES: readonly JobState[] = ["succeeded", "failed", 
  * design (R5.3). `skin-prep` carries optional lighting and grooming-prep tips only,
  * never scores or condition names (R5.4).
  */
-export const OBSERVATION_CATEGORIES = ["lighting", "framing", "background", "image-clarity", "skin-prep", "attire"] as const;
+export const OBSERVATION_CATEGORIES = ["lighting", "framing", "background", "image-clarity", "skin-prep", "attire", "hair"] as const;
 export type ObservationCategory = (typeof OBSERVATION_CATEGORIES)[number];
 
 /** A job-context cue backed by an excerpt from the job description (R5.1). */
@@ -132,16 +132,29 @@ export const ANALYSIS_REQUEST_FIELDS = {
   locale: "locale",
 } as const;
 
-/** The single curated try-on style in the MVP (R6.1). */
+/** The single try-on category in the MVP (R6.1). */
+export const TRY_ON_CATEGORY = "hairstyle" as const;
+
+/**
+ * Curated interview hairstyles (R6.1). Every style keeps the user's own hair color,
+ * and none is tied to a gender: the user chooses, and suggestions come only from the
+ * job's dress formality (R6.4). Display names are localized in the desktop.
+ */
 export const TRY_ON_STYLES = [
-  {
-    id: "navy-blazer",
-    label: "Navy blazer",
-    description: "A classic single-breasted navy blazer, a common choice for business interviews.",
-  },
-] as const;
+  { id: "sleek-middle-part", formality: ["formal", "business-casual"] },
+  { id: "neat-updo", formality: ["formal", "business-casual"] },
+  { id: "side-swept-cut", formality: ["formal", "business-casual", "smart-casual"] },
+  { id: "side-part-straight", formality: ["business-casual", "smart-casual"] },
+  { id: "short-bob", formality: ["business-casual", "smart-casual", "casual"] },
+  { id: "textured-comma", formality: ["smart-casual", "casual"] },
+] as const satisfies ReadonlyArray<{ id: string; formality: readonly Formality[] }>;
 
 export type TryOnStyleId = (typeof TRY_ON_STYLES)[number]["id"];
+
+/** Styles that suit the posting's dress formality, in catalog order. Never based on the photo (R6.4). */
+export function suggestedStyleIds(formality: Formality): TryOnStyleId[] {
+  return TRY_ON_STYLES.filter((style) => (style.formality as readonly Formality[]).includes(formality)).map((style) => style.id);
+}
 
 export interface TryOnRequest {
   analysisJobId: AnalysisJobId;
