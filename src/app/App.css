@@ -384,3 +384,65 @@ main:focus-visible {
   /* Mirror the live preview only; captured frames are not mirrored. */
   transform: scaleX(-1);
 }
+
+/* Notices */
+.notice {
+  max-width: 680px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid #2a7c70;
+  border-radius: 12px;
+  color: var(--accent-strong);
+  background: rgba(31, 124, 108, 0.15);
+  line-height: 1.5;
+}
+
+/* Consent */
+.consent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.consent-grid section {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.consent-grid h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.consent-grid ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.consent-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.consent-control input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 860px) {
+  .consent-grid {
+    grid-template-columns: 1fr;
+  }
+}

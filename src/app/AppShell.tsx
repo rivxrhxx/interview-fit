@@ -4,10 +4,12 @@ import { StepProgress } from "./StepProgress";
 
 interface AppShellProps {
   step: FlowStep;
+  /** Optional message shown under the heading and announced with the step. */
+  notice?: string;
   children: ReactNode;
 }
 
-export function AppShell({ step, children }: AppShellProps) {
+export function AppShell({ step, notice, children }: AppShellProps) {
   const mainRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const renderedStep = useRef(step);
@@ -40,10 +42,11 @@ export function AppShell({ step, children }: AppShellProps) {
         <h1 ref={headingRef} tabIndex={-1}>
           {STEP_META[step].heading}
         </h1>
+        {notice && <p className="notice">{notice}</p>}
         {children}
       </main>
       <p className="visually-hidden" role="status" aria-live="polite">
-        {describeStep(step)}
+        {notice ? `${describeStep(step)}. ${notice}` : describeStep(step)}
       </p>
     </div>
   );

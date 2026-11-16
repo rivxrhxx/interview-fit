@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:privacy": "vitest run privacy",
     "preview": "vite preview",
     "verify:harness": "node scripts/verify-harness.mjs",
     "verify:fast": "npm run verify:harness && npm run typecheck && npm run test",
