@@ -1,4 +1,5 @@
-// Task 8.1 — one curated try-on in the desktop flow: R6.1 (exactly one style), R6.2
+// Tasks 8.1 and 12.5 — hairstyle try-on in the desktop flow: R6.1 (one category, curated
+// styles), R6.4 (the user chooses; suggestions come from the posting only), R6.2
 // (original/result comparison and reset), R6.3 (no implicit persistence), cancellation.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -25,8 +26,9 @@ async function reachGuidance(user: ReturnType<typeof userEvent.setup>) {
 
 async function openTryOn(user: ReturnType<typeof userEvent.setup>) {
   await reachGuidance(user);
-  await user.click(screen.getByRole("button", { name: "Preview interview attire" }));
-  await screen.findByRole("heading", { level: 1, name: "Preview interview attire" });
+  await user.click(screen.getByRole("button", { name: "Preview a hairstyle" }));
+  await screen.findByRole("heading", { level: 1, name: "Preview an interview hairstyle" });
+  await user.click(screen.getByRole("radio", { name: /^Neat updo/ }));
 }
 
 function urlSpies() {
@@ -37,17 +39,55 @@ function urlSpies() {
 }
 
 describe("virtual try-on step", () => {
-  it("offers exactly one curated style and no style picker (R6.1)", async () => {
+  it("offers the curated hairstyles in one picker and preselects one that suits the posting (R6.1, R6.4)", async () => {
     const user = userEvent.setup();
     renderApp();
 
+    await reachGuidance(user);
+    await user.click(screen.getByRole("button", { name: "Preview a hairstyle" }));
+
+    const picker = await screen.findByRole("group", { name: "Curated hairstyles" });
+    const radios = within(picker).getAllByRole("radio");
+    expect(radios).toHaveLength(6);
+    // The fixture posting is business casual; the first matching style is preselected.
+    expect(within(picker).getByRole("radio", { name: /^Sleek middle part/ })).toBeChecked();
+    expect(within(picker).getAllByText("Suits the posting")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Preview Sleek middle part" })).toBeInTheDocument();
+    expect(screen.queryByText(/gender|male|female/i)).not.toBeInTheDocument();
+  });
+
+  it("loads style thumbnails from the backend only", async () => {
+    const api = mockApi();
+    const user = userEvent.setup();
+    renderApp(createMockAdapters({ api }));
+
     await openTryOn(user);
 
-    const style = screen.getByRole("region", { name: "Curated style" });
-    expect(within(style).getByRole("heading", { name: "Navy blazer" })).toBeInTheDocument();
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(api.getStyleThumbnail).toHaveBeenCalledTimes(6));
+    expect(vi.mocked(api.getStyleThumbnail).mock.calls.map((call) => call[0])).toEqual([
+      "sleek-middle-part",
+      "neat-updo",
+      "side-swept-cut",
+      "side-part-straight",
+      "short-bob",
+      "textured-comma",
+    ]);
+  });
+
+  it("previews the chosen style and lets the user try another one", async () => {
+    const api = mockApi();
+    const user = userEvent.setup();
+    renderApp(createMockAdapters({ api }));
+    await openTryOn(user);
+
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
+    await screen.findByRole("img", { name: "Neat updo preview" });
+    await user.click(screen.getByRole("button", { name: "Try another style" }));
+    await user.click(screen.getByRole("radio", { name: /^Short bob/ }));
+    await user.click(screen.getByRole("button", { name: "Preview Short bob" }));
+
+    expect(await screen.findByRole("img", { name: "Short bob preview" })).toBeInTheDocument();
+    expect(vi.mocked(api.createTryOnJob).mock.calls.map((call) => call[0].styleId)).toEqual(["neat-updo", "short-bob"]);
   });
 
   it("compares the original with the preview and resets it (R6.2)", async () => {
@@ -57,21 +97,21 @@ describe("virtual try-on step", () => {
     renderApp(createMockAdapters({ api }));
     await openTryOn(user);
 
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
 
     const original = await screen.findByRole("img", { name: "Your photo" });
-    const preview = screen.getByRole("img", { name: "Navy blazer preview" });
+    const preview = screen.getByRole("img", { name: "Neat updo preview" });
     expect(original.getAttribute("src")).not.toBe(preview.getAttribute("src"));
-    expect(api.createTryOnJob).toHaveBeenCalledWith({ analysisJobId: analysis.id, styleId: "navy-blazer" }, expect.anything());
+    expect(api.createTryOnJob).toHaveBeenCalledWith({ analysisJobId: analysis.id, styleId: "neat-updo" }, expect.anything());
     expect(screen.getByRole("status")).toHaveTextContent("Preview ready");
 
     const previewUrl = preview.getAttribute("src");
-    await user.click(screen.getByRole("button", { name: "Reset preview" }));
+    await user.click(screen.getByRole("button", { name: "Try another style" }));
 
-    expect(screen.queryByRole("img", { name: "Navy blazer preview" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Neat updo preview" })).not.toBeInTheDocument();
     expect(revoke).toHaveBeenCalledWith(previewUrl);
     await vi.waitFor(() => expect(api.cancelTryOnJob).toHaveBeenCalledWith(queuedTryOn().id));
-    expect(screen.getByRole("button", { name: "Generate preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview Neat updo" })).toBeInTheDocument();
   });
 
   it("cancels a running preview, stops polling, and deletes the backend job", async () => {
@@ -80,11 +120,11 @@ describe("virtual try-on step", () => {
     renderApp(createMockAdapters({ api }));
     await openTryOn(user);
 
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
     await vi.waitFor(() => expect(api.getTryOnJob).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "Cancel preview" }));
 
-    expect(screen.getByRole("button", { name: "Generate preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview Neat updo" })).toBeInTheDocument();
     await vi.waitFor(() => expect(api.cancelTryOnJob).toHaveBeenCalledWith(queuedTryOn().id));
     const polls = vi.mocked(api.getTryOnJob).mock.calls.length;
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -100,8 +140,8 @@ describe("virtual try-on step", () => {
     const user = userEvent.setup();
     renderApp();
     await openTryOn(user);
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
-    const preview = await screen.findByRole("img", { name: "Navy blazer preview" });
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
+    const preview = await screen.findByRole("img", { name: "Neat updo preview" });
     const previewUrl = preview.getAttribute("src");
     expect(screen.getByText("The preview is not saved. Only an explicit export creates a file.")).toBeInTheDocument();
 
@@ -119,7 +159,7 @@ describe("virtual try-on step", () => {
     renderApp(createMockAdapters({ api }));
     await openTryOn(user);
 
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
 
     expect(
       await screen.findByText(
@@ -142,10 +182,10 @@ describe("virtual try-on step", () => {
     renderApp(createMockAdapters({ api }));
     await openTryOn(user);
 
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Neat updo" }));
     await user.click(await screen.findByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByRole("img", { name: "Navy blazer preview" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Neat updo preview" })).toBeInTheDocument();
   });
 
   it("asks the backend to delete the analysis copy when the user starts over", async () => {

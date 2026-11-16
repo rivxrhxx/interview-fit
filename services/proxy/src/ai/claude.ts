@@ -100,6 +100,7 @@ function suggestionSystemPrompt(locale: Locale): string {
     "",
     PEOPLE_RULES,
     "Suggestions are about lighting, camera framing, background, image clarity, clothing, and grooming choices the candidate controls, phrased as options, never as fixes for the person. Never mention scores.",
+    "For the hair category, suggest a general direction that suits the job's formality (for example neat and away from the face, or natural and tidy). Never suggest a hair color change and never assume a gender.",
     "Observations in the skin-prep category describe how light and the camera may render the photo. Answer them only with lighting changes or optional grooming steps (for example blotting shine before the call, or a light moisturizer), and never name a condition or use words such as skin, acne, wrinkles, or pores.",
     "",
     `Write in ${LANGUAGE[locale]}.`,

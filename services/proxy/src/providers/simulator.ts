@@ -1,4 +1,4 @@
-import type { Locale, Observation } from "../../../../packages/contracts/src/index.ts";
+import type { Locale, Observation, TryOnStyleId } from "../../../../packages/contracts/src/index.ts";
 import { encodePng } from "../png.ts";
 import { captureBasics } from "./captureBasics.ts";
 import { skinPrepObservations } from "./youcam/skinPrep.ts";
@@ -65,35 +65,44 @@ export function createSimulatorProvider(options: { delayMs: number; scenario: Si
   };
 }
 
-const NAVY = [31, 45, 82];
-const SHIRT = [236, 238, 242];
-const FIGURE = [150, 156, 168];
+const HAIR = [58, 46, 40];
+const FACE = [196, 184, 172];
+const TOP = [70, 86, 120];
 const BACKDROP = [214, 219, 228];
 
+type Shape = (dx: number, dy: number, r: number) => boolean;
+
+/** Hair silhouettes per curated style, relative to the head center and radius. */
+const HAIR_SHAPES: Record<TryOnStyleId, Shape> = {
+  "sleek-middle-part": (dx, dy, r) => (dy < -0.15 * r && dx * dx + dy * dy < 1.1 * r * r) || (Math.abs(dx) > 0.75 * r && Math.abs(dx) < 1.15 * r && dy < 1.9 * r),
+  "neat-updo": (dx, dy, r) => (dy < -0.25 * r && dx * dx + dy * dy < 1.08 * r * r) || dx * dx + (dy + 1.25 * r) ** 2 < 0.2 * r * r,
+  "side-swept-cut": (dx, dy, r) => dy < -0.2 * r + dx * 0.35 && dx * dx + dy * dy < 1.1 * r * r,
+  "side-part-straight": (dx, dy, r) => (dy < -0.1 * r - dx * 0.2 && dx * dx + dy * dy < 1.1 * r * r) || (dx < -0.7 * r && dx > -1.2 * r && dy < 2 * r) || (dx > 0.75 * r && dx < 1.12 * r && dy < 1.6 * r),
+  "short-bob": (dx, dy, r) => (dy < -0.2 * r && dx * dx + dy * dy < 1.15 * r * r) || (Math.abs(dx) > 0.72 * r && Math.abs(dx) < 1.18 * r && dy < 0.85 * r),
+  "textured-comma": (dx, dy, r) => dy < -0.35 * r + Math.abs(Math.sin(dx / (0.18 * r))) * 0.12 * r && dx * dx + dy * dy < 1.08 * r * r,
+};
+
 /**
- * Draws an illustrative mannequin in a navy blazer (no user pixels, no licensed
- * assets). Used for deterministic demos; the live provider returns a real try-on.
+ * Draws an illustrated head-and-shoulders figure with the chosen hairstyle (no user
+ * pixels, no licensed assets). Used for deterministic demos and thumbnails; the live
+ * provider returns a real try-on.
  */
-function renderBlazerIllustration(width: number, height: number): Uint8Array {
+function renderHairIllustration(width: number, height: number, style: TryOnStyleId): Uint8Array {
   const rgb = new Uint8Array(width * height * 3);
   const cx = width / 2;
-  const headR = height * 0.12;
-  const headY = height * 0.3;
-  const shoulderY = height * 0.52;
+  const r = Math.min(width, height) * 0.17;
+  const headY = height * 0.4;
+  const shoulderY = headY + r * 1.55;
+  const hair = HAIR_SHAPES[style];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      let color = BACKDROP;
       const dx = x - cx;
-      if (dx * dx + (y - headY) ** 2 <= headR * headR) color = FIGURE;
-      else if (y > headY + headR * 0.8 && y < shoulderY && Math.abs(dx) < headR * 0.45) color = FIGURE;
-      else if (y >= shoulderY) {
-        const halfWidth = width * 0.22 + (y - shoulderY) * 0.35;
-        if (Math.abs(dx) < halfWidth) {
-          // A V-shaped shirt opening between the lapels.
-          const opening = Math.max(0, headR * 0.9 - (y - shoulderY) * 0.45);
-          color = Math.abs(dx) < opening ? SHIRT : NAVY;
-        }
-      }
+      const dy = y - headY;
+      let color = BACKDROP;
+      if (y >= shoulderY && Math.abs(dx) < width * 0.24 + (y - shoulderY) * 0.4) color = TOP;
+      else if (y > headY && y < shoulderY && Math.abs(dx) < r * 0.42) color = FACE;
+      if (dx * dx + (dy * dy) / 1.25 <= r * r) color = FACE;
+      if (hair(dx, dy, r) && !(dx * dx + (dy * dy) / 1.25 <= r * r * 0.7 && dy > -0.2 * r)) color = HAIR;
       rgb.set(color, (y * width + x) * 3);
     }
   }
@@ -102,11 +111,14 @@ function renderBlazerIllustration(width: number, height: number): Uint8Array {
 
 export function createSimulatorTryOnProvider(options: { delayMs: number }): TryOnProvider {
   return {
-    async tryOn(image, _style, signal) {
+    async tryOn(image, style, signal) {
       await delay(options.delayMs, signal);
       const width = 480;
       const height = Math.max(240, Math.min(960, Math.round((width * image.height) / image.width)));
-      return { bytes: encodePng(width, height, renderBlazerIllustration(width, height)), mimeType: "image/png" };
+      return { bytes: encodePng(width, height, renderHairIllustration(width, height, style)), mimeType: "image/png" };
+    },
+    async thumbnail(style) {
+      return { bytes: encodePng(160, 160, renderHairIllustration(160, 160, style)), mimeType: "image/png" };
     },
   };
 }

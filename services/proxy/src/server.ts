@@ -78,6 +78,7 @@ const ROUTES = {
   tryOnCollection: "/v1/try-on-jobs",
   tryOnItem: /^\/v1\/try-on-jobs\/([^/]+)$/,
   tryOnResult: /^\/v1\/try-on-jobs\/([^/]+)\/result$/,
+  styleThumbnail: /^\/v1\/try-on-styles\/([^/]+)\/thumbnail$/,
 };
 
 function iso(ms: number) {
@@ -437,6 +438,29 @@ export function createProxy(deps: ProxyDeps): Proxy {
       if (record.state !== "succeeded" || !record.result) throw new HttpError("JOB_NOT_FOUND");
       sendImage(response, record.result.bytes, record.result.mimeType, cors);
       return "/v1/try-on-jobs/:id/result";
+    }
+
+    const styleThumbnail = ROUTES.styleThumbnail.exec(path);
+    if (styleThumbnail) {
+      request.resume();
+      if (method !== "GET") throw new HttpError("JOB_NOT_FOUND", { status: 405, headers: { Allow: "GET, OPTIONS" } });
+      const styleId = styleThumbnail[1];
+      // Only curated styles; anything else never reaches the provider.
+      if (!TRY_ON_STYLE_IDS.includes(styleId)) throw new HttpError("JOB_NOT_FOUND");
+      if (!deps.tryOnProvider) throw new HttpError("PROCESSING_UNAVAILABLE");
+      let thumbnail: { bytes: Uint8Array; mimeType: string };
+      try {
+        thumbnail = await withDeadline(
+          (signal) => deps.tryOnProvider!.thumbnail(styleId as TryOnStyleId, signal),
+          new AbortController(),
+          config.providerTimeoutMs,
+        );
+      } catch (error) {
+        throw new HttpError(toErrorCode(error));
+      }
+      // A catalog image with no user data, so the desktop may reuse it briefly.
+      sendImage(response, thumbnail.bytes, thumbnail.mimeType, { ...cors, "Cache-Control": "private, max-age=3600" });
+      return "/v1/try-on-styles/:id/thumbnail";
     }
 
     const tryOnItem = ROUTES.tryOnItem.exec(path);

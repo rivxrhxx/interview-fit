@@ -41,7 +41,9 @@ export interface TryOnResult {
   mimeType: "image/jpeg" | "image/png";
 }
 
-/** Virtual try-on boundary for the single curated style (R6.1). */
+/** Hairstyle try-on boundary for one curated style at a time (R6.1). */
 export interface TryOnProvider {
   tryOn(image: ProviderImage, style: TryOnStyleId, signal: AbortSignal): Promise<TryOnResult>;
+  /** A metadata-free preview image of a curated style. Contains no user data. */
+  thumbnail(style: TryOnStyleId, signal: AbortSignal): Promise<TryOnResult>;
 }

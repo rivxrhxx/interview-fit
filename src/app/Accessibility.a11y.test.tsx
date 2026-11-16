@@ -67,10 +67,10 @@ describe("automated accessibility checks (axe-core)", () => {
     await user.click(screen.getByRole("button", { name: "Agree and analyze" }));
     await screen.findByRole("heading", { level: 1, name: "Your presentation guidance" });
     await expectAccessible(); // reviewed
-    await user.click(screen.getByRole("button", { name: "Preview interview attire" }));
+    await user.click(screen.getByRole("button", { name: "Preview a hairstyle" }));
     await expectAccessible(); // trying-on idle
-    await user.click(screen.getByRole("button", { name: "Generate preview" }));
-    await screen.findByRole("img", { name: "Navy blazer preview" });
+    await user.click(screen.getByRole("button", { name: "Preview Sleek middle part" }));
+    await screen.findByRole("img", { name: "Sleek middle part preview" });
     await expectAccessible(); // trying-on compare
     await user.click(screen.getByRole("button", { name: "Continue to report" }));
     await expectAccessible(); // report-ready
@@ -189,11 +189,11 @@ describe("keyboard-only walkthrough (R8.1)", () => {
     await user.keyboard("{Enter}");
 
     await screen.findByRole("heading", { level: 1, name: "Your presentation guidance" });
-    await tabTo(user, "Preview interview attire");
+    await tabTo(user, "Preview a hairstyle");
     await user.keyboard("{Enter}");
-    await tabTo(user, "Generate preview");
+    await tabTo(user, "Preview Sleek middle part");
     await user.keyboard("{Enter}");
-    await screen.findByRole("img", { name: "Navy blazer preview" });
+    await screen.findByRole("img", { name: "Sleek middle part preview" });
     await tabTo(user, "Continue to report");
     await user.keyboard("{Enter}");
     await tabTo(user, "Save report…");

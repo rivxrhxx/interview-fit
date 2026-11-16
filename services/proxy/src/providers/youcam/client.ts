@@ -9,10 +9,25 @@ import type { YouCamConfig } from "./config.ts";
  */
 export type TaskOutcome = { status: "success"; results: unknown } | { status: "error"; code: string };
 
+/** Task API version; hair-transfer exists only under v2.1. */
+export type TaskVersion = "v2.0" | "v2.1";
+
+export interface YouCamTemplate {
+  id: string;
+  thumb: string;
+}
+
 export interface YouCamClient {
   uploadImage(image: ProviderImage, signal: AbortSignal): Promise<string>;
-  createTask(tool: string, body: Record<string, unknown>, signal: AbortSignal): Promise<string>;
-  waitForTask(tool: string, taskId: string, signal: AbortSignal): Promise<TaskOutcome>;
+  createTask(tool: string, body: Record<string, unknown>, signal: AbortSignal, version?: TaskVersion): Promise<string>;
+  waitForTask(tool: string, taskId: string, signal: AbortSignal, version?: TaskVersion): Promise<TaskOutcome>;
+  /** One page of a tool's preset templates (id and thumbnail URL only). */
+  listTemplates(
+    tool: string,
+    version: TaskVersion,
+    startingToken: string | null,
+    signal: AbortSignal,
+  ): Promise<{ templates: YouCamTemplate[]; nextToken: string | null }>;
   /** Downloads a result from a pre-signed https URL without credentials. */
   downloadResult(url: unknown, maxBytes: number, signal: AbortSignal): Promise<Uint8Array>;
 }
@@ -167,11 +182,11 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
       return fileId;
     },
 
-    async createTask(tool, body, signal) {
+    async createTask(tool, body, signal, version = "v2.0") {
       // Task creation consumes units and has no idempotency key, so it is never retried.
       const created = await send(
         "task_create",
-        api(`/s2s/v2.0/task/${tool}`),
+        api(`/s2s/${version}/task/${tool}`),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
         true,
       );
@@ -201,7 +216,24 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
       return bytes;
     },
 
-    async waitForTask(tool, taskId, signal) {
+    async listTemplates(tool, version, startingToken, signal) {
+      const query = new URLSearchParams({ page_size: "20" });
+      if (startingToken) query.set("starting_token", startingToken);
+      const reply = await send("template_list", api(`/s2s/${version}/task/template/${tool}?${query}`), { method: "GET", signal }, true);
+      if (reply.status !== 200) throw failure(reply);
+      const data = record(record(reply.body)?.data);
+      if (!data || !Array.isArray(data.templates)) throw new ProviderError("malformed-response");
+      const templates = data.templates.flatMap((entry) => {
+        const template = record(entry);
+        const id = nonEmptyString(template?.id);
+        const thumb = nonEmptyString(template?.thumb);
+        return id && thumb ? [{ id, thumb }] : [];
+      });
+      const next = data.next_token;
+      return { templates, nextToken: typeof next === "string" && next.length > 0 ? next : typeof next === "number" ? String(next) : null };
+    },
+
+    async waitForTask(tool, taskId, signal, version = "v2.0") {
       let failures = 0;
       for (;;) {
         if (signal.aborted) throw signal.reason;
@@ -209,7 +241,7 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
         try {
           reply = await send(
             "task_poll",
-            api(`/s2s/v2.0/task/${tool}/${encodeURIComponent(taskId)}`),
+            api(`/s2s/${version}/task/${tool}/${encodeURIComponent(taskId)}`),
             { method: "GET", signal },
             true,
           );

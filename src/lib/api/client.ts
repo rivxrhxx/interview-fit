@@ -15,6 +15,7 @@ import {
   type TryOnJob,
   type TryOnJobId,
   type TryOnRequest,
+  type TryOnStyleId,
   type Locale,
 } from "./contracts";
 import { sniffImageType } from "../validation/image";
@@ -56,6 +57,8 @@ export interface ApiClient {
   /** Result image held in memory only; never written to storage implicitly (R6.3). */
   getTryOnResult(id: TryOnJobId, signal?: AbortSignal): Promise<Blob>;
   cancelTryOnJob(id: TryOnJobId): Promise<void>;
+  /** Example image of a curated hairstyle, served by the backend (no vendor URL reaches the desktop). */
+  getStyleThumbnail(styleId: TryOnStyleId, signal?: AbortSignal): Promise<Blob>;
 }
 
 const REQUEST_DEFAULTS: RequestInit = {
@@ -112,6 +115,23 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       if (error instanceof ContractError) throw new ApiRequestError("INTERNAL_ERROR");
       throw error;
     }
+  }
+
+  /** Fetches an image into memory; only JPEG or PNG whose bytes match the declared type is accepted (no SVG or HTML). */
+  async function fetchImage(path: string, signal?: AbortSignal): Promise<Blob> {
+    let response: Response;
+    try {
+      response = await fetchImpl(`${options.baseUrl}${path}`, { ...REQUEST_DEFAULTS, method: "GET", signal });
+    } catch (error) {
+      if (isAbort(error)) throw error;
+      throw new ApiRequestError("PROCESSING_UNAVAILABLE");
+    }
+    if (!response.ok) throw new ApiRequestError(response.status === 404 ? "JOB_NOT_FOUND" : "INTERNAL_ERROR");
+    const declared = response.headers.get("content-type") ?? "";
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const actual = sniffImageType(bytes);
+    if (!actual || !declared.startsWith(actual)) throw new ApiRequestError("INTERNAL_ERROR");
+    return new Blob([bytes], { type: actual });
   }
 
   async function ignoreMissing(work: Promise<unknown>): Promise<void> {
@@ -187,25 +207,12 @@ export function createHttpApiClient(options: { baseUrl: string; fetch?: typeof f
       return request(API_ROUTES.tryOnJob(id), { method: "GET", signal }, parseTryOnJob);
     },
 
-    async getTryOnResult(id, signal) {
-      let response: Response;
-      try {
-        response = await fetchImpl(`${options.baseUrl}${API_ROUTES.tryOnResult(id)}`, {
-          ...REQUEST_DEFAULTS,
-          method: "GET",
-          signal,
-        });
-      } catch (error) {
-        if (isAbort(error)) throw error;
-        throw new ApiRequestError("PROCESSING_UNAVAILABLE");
-      }
-      if (!response.ok) throw new ApiRequestError(response.status === 404 ? "JOB_NOT_FOUND" : "INTERNAL_ERROR");
-      const declared = response.headers.get("content-type") ?? "";
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const actual = sniffImageType(bytes);
-      // Only JPEG or PNG whose bytes match the declared type is rendered (no SVG or HTML).
-      if (!actual || !declared.startsWith(actual)) throw new ApiRequestError("INTERNAL_ERROR");
-      return new Blob([bytes], { type: actual });
+    getTryOnResult(id, signal) {
+      return fetchImage(API_ROUTES.tryOnResult(id), signal);
+    },
+
+    getStyleThumbnail(styleId, signal) {
+      return fetchImage(API_ROUTES.tryOnStyleThumbnail(styleId), signal);
     },
 
     cancelTryOnJob(id) {

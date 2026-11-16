@@ -1,1 +1,1 @@
-export { CURATED_STYLE, TryOnStep, tryOnNotice, type TryOnPhase, type TryOnTiming } from "./TryOnStep";
+export { TryOnStep, tryOnNotice, type TryOnPhase, type TryOnTiming } from "./TryOnStep";

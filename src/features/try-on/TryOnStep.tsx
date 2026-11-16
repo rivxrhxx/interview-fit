@@ -1,7 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAdapters } from "../../lib/adapters";
-import { ERROR_POLICY, TRY_ON_STYLES, type AnalysisJobId, type ErrorCode, type TryOnJobId } from "../../lib/api/contracts";
+import {
+  ERROR_POLICY,
+  TRY_ON_STYLES,
+  type AnalysisJobId,
+  type ErrorCode,
+  type TryOnJobId,
+  type TryOnStyleId,
+} from "../../lib/api/contracts";
 import { useI18n, type Messages } from "../../lib/i18n";
+import { useObjectUrl } from "../../lib/media/useObjectUrl";
 import { runTryOn, type TryOnOutcome } from "./runTryOn";
 import { TryOnCompare } from "./TryOnCompare";
 
@@ -16,15 +24,16 @@ export interface TryOnTiming {
   timeoutMs: number;
 }
 
-/** The MVP offers exactly one curated style (R6.1). */
-export const CURATED_STYLE = TRY_ON_STYLES[0];
-
 interface TryOnStepProps {
   phase: TryOnPhase;
   attempt: number;
+  styleId: TryOnStyleId;
+  /** Styles that suit the posting's formality (R6.4). */
+  suggested: readonly TryOnStyleId[];
   original: Blob;
   analysisJobId: AnalysisJobId;
   timing: TryOnTiming;
+  onSelect: (styleId: TryOnStyleId) => void;
   onStart: () => void;
   onFinished: (outcome: Exclude<TryOnOutcome, { status: "cancelled" }>, jobId: TryOnJobId | null) => void;
   onCancel: () => void;
@@ -35,9 +44,10 @@ interface TryOnStepProps {
 
 function TryOnRunner({
   analysisJobId,
+  styleId,
   timing,
   onFinished,
-}: Pick<TryOnStepProps, "analysisJobId" | "timing" | "onFinished">) {
+}: Pick<TryOnStepProps, "analysisJobId" | "styleId" | "timing" | "onFinished">) {
   const { api } = useAdapters();
   const finished = useRef(onFinished);
   finished.current = onFinished;
@@ -48,7 +58,7 @@ function TryOnRunner({
     void runTryOn({
       api,
       analysisJobId,
-      styleId: CURATED_STYLE.id,
+      styleId,
       signal: controller.signal,
       pollIntervalMs: timing.pollIntervalMs,
       timeoutMs: timing.timeoutMs,
@@ -58,7 +68,7 @@ function TryOnRunner({
     });
     // Unmounting (cancel, navigation, close) aborts polling and deletes the backend job.
     return () => controller.abort();
-  }, [api, analysisJobId, timing]);
+  }, [api, analysisJobId, styleId, timing]);
 
   return (
     <div className="progress-track" aria-hidden="true">
@@ -67,14 +77,70 @@ function TryOnRunner({
   );
 }
 
+/** Example image of a style from the backend; a plain placeholder if it cannot be loaded. */
+function StyleThumbnail({ styleId }: { styleId: TryOnStyleId }) {
+  const { api } = useAdapters();
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const url = useObjectUrl(blob);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .getStyleThumbnail(styleId, controller.signal)
+      .then((image) => {
+        if (!controller.signal.aborted) setBlob(image);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [api, styleId]);
+
+  return (
+    // Decorative: the style name next to it is the accessible label.
+    <span className="style-thumb" aria-hidden="true">
+      {url ? <img src={url} alt="" /> : <span className="style-thumb-placeholder" />}
+    </span>
+  );
+}
+
+function StylePicker({ styleId, suggested, disabled, onSelect }: Pick<TryOnStepProps, "styleId" | "suggested" | "onSelect"> & { disabled: boolean }) {
+  const { m } = useI18n();
+  return (
+    <fieldset className="style-picker" disabled={disabled}>
+      <legend className="section-title">{m.tryOn.pickerLabel}</legend>
+      <p className="hint">{m.tryOn.pickerHint}</p>
+      <div className="style-grid">
+        {TRY_ON_STYLES.map((style) => {
+          const copy = m.tryOn.styles[style.id];
+          const isSuggested = suggested.includes(style.id);
+          return (
+            <label key={style.id} className="style-option" data-selected={style.id === styleId || undefined}>
+              <input
+                type="radio"
+                name="hairstyle"
+                value={style.id}
+                checked={style.id === styleId}
+                onChange={() => onSelect(style.id)}
+              />
+              <StyleThumbnail styleId={style.id} />
+              <span className="style-name">{copy.label}</span>
+              <span className="style-description">{copy.description}</span>
+              {isSuggested && <span className="badge badge-accent">{m.tryOn.suggested}</span>}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 export function TryOnStep(props: TryOnStepProps) {
-  const { phase } = props;
+  const { phase, styleId } = props;
   const { api } = useAdapters();
   const { m } = useI18n();
-  const style = m.tryOn.style;
+  const label = m.tryOn.styles[styleId].label;
   const readyJob = phase.status === "ready" ? phase.jobId : null;
 
-  // Leaving the ready state (reset, back, start over) deletes the backend copy of the result.
+  // Leaving the ready state (another style, reset, back, start over) deletes the backend copy of the result.
   useEffect(() => {
     if (!readyJob) return;
     return () => {
@@ -86,22 +152,18 @@ export function TryOnStep(props: TryOnStepProps) {
 
   return (
     <div className="step-stack">
-      <section className="panel" aria-label={m.tryOn.regionLabel}>
-        <p className="eyebrow">{m.tryOn.eyebrow}</p>
-        <h2 className="section-title">{style.label}</h2>
-        <p className="hint">{style.description}</p>
-        <p className="meta">{m.tryOn.notSaved}</p>
-      </section>
+      {phase.status !== "ready" && (
+        <StylePicker styleId={styleId} suggested={props.suggested} disabled={phase.status === "running"} onSelect={props.onSelect} />
+      )}
+      <p className="meta">{m.tryOn.notSaved}</p>
 
       {phase.status === "running" && <TryOnRunner key={props.attempt} {...props} />}
-      {phase.status === "ready" && (
-        <TryOnCompare original={props.original} preview={phase.preview} styleLabel={style.label} />
-      )}
+      {phase.status === "ready" && <TryOnCompare original={props.original} preview={phase.preview} styleLabel={label} />}
 
       <div className="actions">
         {phase.status === "idle" && (
           <button type="button" className="button button-primary" onClick={props.onStart}>
-            {m.tryOn.generate}
+            {m.tryOn.generate(label)}
           </button>
         )}
         {retryable && (

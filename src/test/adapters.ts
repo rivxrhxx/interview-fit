@@ -22,6 +22,7 @@ export function mockApi(overrides: Partial<ApiClient> = {}): ApiClient {
     getTryOnJob: vi.fn(async () => parseTryOnJob(tryOnSucceededFixture)),
     getTryOnResult: vi.fn(async () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" })),
     cancelTryOnJob: vi.fn(async () => {}),
+    getStyleThumbnail: vi.fn(async () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" })),
     ...overrides,
   };
 }

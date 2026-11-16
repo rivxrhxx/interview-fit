@@ -15,6 +15,7 @@ import { RecommendationList } from "../features/recommendation";
 import { ReportStep } from "../features/report";
 import { TryOnStep, tryOnNotice } from "../features/try-on";
 import { useAdapters } from "../lib/adapters";
+import { suggestedStyleIds } from "../lib/api/contracts";
 import { useI18n, type Messages } from "../lib/i18n";
 import {
   JobDescriptionForm,
@@ -141,9 +142,12 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
         <TryOnStep
           phase={state.tryOn}
           attempt={state.attempt}
+          styleId={state.styleId}
+          suggested={suggestedStyleIds(state.jobContext.formality)}
           original={state.image.blob}
           analysisJobId={state.analysis.jobId}
           timing={timing}
+          onSelect={(styleId) => dispatch({ type: "TRY_ON_STYLE_SELECTED", styleId })}
           onStart={() => dispatch({ type: "TRY_ON_STARTED" })}
           onFinished={(outcome, jobId) =>
             dispatch(
@@ -163,6 +167,7 @@ function StepContent({ state, dispatch, timing }: { state: FlowState; dispatch: 
         <ReportStep
           result={state.analysis.result}
           tryOn={state.tryOn}
+          tryOnStyleId={state.tryOnStyleId}
           generatedAt={state.generatedAt}
           onBack={() => dispatch({ type: "REPORT_CLOSED" })}
           onStartOver={() => dispatch({ type: "START_OVER" })}

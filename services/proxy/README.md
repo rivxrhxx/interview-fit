@@ -28,8 +28,6 @@ All settings come from the backend environment. Never put provider credentials i
 | `YOUCAM_API_KEY` | (none) | Required for `youcam`. Read only by the proxy, wrapped in a redacting `Secret` |
 | `YOUCAM_API_BASE_URL` | `https://yce-api-01.makeupar.com` | Must be https |
 | `YOUCAM_POLL_INTERVAL_MS` | `2000` | Status polling interval |
-| `YOUCAM_TRYON_REF_FILE_URL` | (none) | https URL of the licensed navy-blazer garment image for the curated try-on. Without it, try-on requests fail with `PROCESSING_UNAVAILABLE` and no provider call is made |
-| `YOUCAM_TRYON_GARMENT_CATEGORY` | `outer` | cloth-v4 `garment_category`: `outer`, `upper_body`, `full_body`, or `auto` |
 | `PROVIDER_TIMEOUT_MS` | `45000` | Hard deadline per analysis |
 | `JOB_TTL_MS` | `900000` | How long a finished job and its image are kept for try-on |
 | `TERMINAL_RETENTION_MS` | `60000` | How long a failed or cancelled job record (without image) stays readable |
@@ -69,15 +67,16 @@ The analysis runs two YouCam tools in parallel, each on its own upload (reusing 
 - Expired jobs are swept on a timer. Their images are zeroed, and try-on results made from them are deleted with them.
 - Requests time out after 30 seconds (10 seconds for headers).
 
-## Virtual try-on
+## Hairstyle try-on
 
-`POST /v1/try-on-jobs` takes `{ analysisJobId, styleId }` and reuses the temporary image of a successful, consented analysis job, so nothing is uploaded again. The only style is `navy-blazer` (R6.1).
+`POST /v1/try-on-jobs` takes `{ analysisJobId, styleId }` and reuses the temporary image of a successful, consented analysis job, so nothing is uploaded again by the desktop. `styleId` is one of six curated hairstyles in `TRY_ON_STYLES` (R6.1). The desktop lets the user choose; suggestions come only from the posting's dress formality, never from the photo (R6.4).
 
-- The simulator returns a procedurally drawn illustration (no user pixels, no licensed assets) for deterministic demos.
-- The YouCam adapter calls `cloth-v4` with the operator-configured garment image. It downloads the result on the backend, validates it, strips its metadata, and serves it from `GET /v1/try-on-jobs/{id}/result`. The provider's result URL is never forwarded.
-- `DELETE /v1/try-on-jobs/{id}` cancels a running try-on or deletes a finished result (reset). Results never outlive the analysis job they came from.
+- The YouCam adapter calls AI Hairstyle `hair-transfer` (v2.1) with a curated `template_id` and `hair_color: "src"`. All six templates have `keep_users_color`, so the user's own hair color is kept. The template's category tag is never shown or used. The result is downloaded on the backend, validated, stripped of metadata, and served from `GET /v1/try-on-jobs/{id}/result`. The provider's result URL is never forwarded.
+- `GET /v1/try-on-styles/{styleId}/thumbnail` serves a style's example image. The backend finds the template's thumbnail in YouCam's template list, downloads it, strips its metadata, and keeps it in memory. Only curated style IDs reach the provider.
+- The simulator draws illustrated hairstyles (no user pixels, no licensed assets) for deterministic demos and thumbnails.
+- `DELETE /v1/try-on-jobs/{id}` cancels a running try-on or deletes a finished result (reset or another style). Results never outlive the analysis job they came from.
 
-YouCam documents that task results stay queryable for 24 hours and result URLs for 2 hours. The proxy cannot delete provider-side data, so the consent text refers to the provider's own retention terms instead of promising a deletion time.
+YouCam documents that hair-transfer task IDs stay queryable for 24 hours and result URLs for 2 hours. The proxy cannot delete provider-side data, so the consent text refers to the provider's own retention terms instead of promising a deletion time.
 
 ## Production notes
 

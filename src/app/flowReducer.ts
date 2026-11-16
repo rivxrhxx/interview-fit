@@ -1,4 +1,14 @@
-import type { AnalysisJobId, AnalysisResult, ErrorCode, JobContext, Recovery, TryOnJobId } from "../lib/api/contracts";
+import {
+  TRY_ON_STYLES,
+  suggestedStyleIds,
+  type AnalysisJobId,
+  type AnalysisResult,
+  type ErrorCode,
+  type JobContext,
+  type Recovery,
+  type TryOnJobId,
+  type TryOnStyleId,
+} from "../lib/api/contracts";
 import type { AnalysisStage } from "../features/analysis";
 import type { PreparedImage } from "../features/capture";
 import type { TryOnReportStatus } from "../features/report";
@@ -39,8 +49,15 @@ export type FlowState =
   | ({ step: "consenting" } & WithPhoto)
   | ({ step: "analyzing"; stage: AnalysisStage; attempt: number } & AnalysisContext)
   | ({ step: "reviewed"; analysis: ReviewedAnalysis } & WithPhoto)
-  | ({ step: "trying-on"; analysis: ReviewedAnalysis; tryOn: TryOnPhase; attempt: number } & WithPhoto)
-  | ({ step: "report-ready"; analysis: ReviewedAnalysis; tryOn: TryOnReportStatus; generatedAt: string } & WithPhoto)
+  | ({ step: "trying-on"; analysis: ReviewedAnalysis; styleId: TryOnStyleId; tryOn: TryOnPhase; attempt: number } & WithPhoto)
+  | ({
+      step: "report-ready";
+      analysis: ReviewedAnalysis;
+      tryOn: TryOnReportStatus;
+      /** The style whose preview was created; null when none was. */
+      tryOnStyleId: TryOnStyleId | null;
+      generatedAt: string;
+    } & WithPhoto)
   | { step: "error"; code: ErrorCode; context: AnalysisContext; attempt: number };
 
 export type FlowEvent =
@@ -61,6 +78,7 @@ export type FlowEvent =
   | { type: "RECOVERY_SELECTED"; recovery: Recovery }
   | { type: "START_OVER" }
   | { type: "TRY_ON_OPENED" }
+  | { type: "TRY_ON_STYLE_SELECTED"; styleId: TryOnStyleId }
   | { type: "TRY_ON_STARTED" }
   | { type: "TRY_ON_SUCCEEDED"; preview: Blob; jobId: TryOnJobId }
   | { type: "TRY_ON_FAILED"; code: ErrorCode }
@@ -102,9 +120,15 @@ function recover(state: Extract<FlowState, { step: "error" }>, recovery: Recover
 function reportFrom(
   state: WithPhoto & { analysis: ReviewedAnalysis },
   tryOn: TryOnReportStatus,
+  tryOnStyleId: TryOnStyleId | null = null,
 ): Omit<Extract<FlowState, { step: "report-ready" }>, "generatedAt"> {
   // The try-on preview itself is dropped here; only its status goes into the report (R7.1, R6.3).
-  return { step: "report-ready", ...withPhoto(state), analysis: state.analysis, tryOn };
+  return { step: "report-ready", ...withPhoto(state), analysis: state.analysis, tryOn, tryOnStyleId };
+}
+
+/** Preselects the first style that suits the posting's formality; never based on the photo (R6.4). */
+function defaultStyle(jobContext: JobContext): TryOnStyleId {
+  return suggestedStyleIds(jobContext.formality)[0] ?? TRY_ON_STYLES[0].id;
 }
 
 function jobTransition(state: Extract<FlowState, { step: "job-reviewed" }>, event: FlowEvent): FlowState {
@@ -135,6 +159,9 @@ function jobTransition(state: Extract<FlowState, { step: "job-reviewed" }>, even
 function tryOnTransition(state: Extract<FlowState, { step: "trying-on" }>, event: FlowEvent): FlowState {
   const { tryOn } = state;
   switch (event.type) {
+    case "TRY_ON_STYLE_SELECTED":
+      // Choosing another style discards any preview; never while one is being created.
+      return tryOn.status === "running" ? state : { ...state, styleId: event.styleId, tryOn: { status: "idle" } };
     case "TRY_ON_STARTED":
       return tryOn.status === "idle" || tryOn.status === "failed"
         ? { ...state, tryOn: { status: "running" }, attempt: state.attempt + 1 }
@@ -210,7 +237,14 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
         case "START_OVER":
           return reviewedJob(state);
         case "TRY_ON_OPENED":
-          return { step: "trying-on", ...withPhoto(state), analysis: state.analysis, tryOn: { status: "idle" }, attempt: 0 };
+          return {
+            step: "trying-on",
+            ...withPhoto(state),
+            analysis: state.analysis,
+            styleId: defaultStyle(state.jobContext),
+            tryOn: { status: "idle" },
+            attempt: 0,
+          };
         case "REPORT_REQUESTED":
           return { ...reportFrom(state, "not-created"), generatedAt: event.generatedAt };
         default:
@@ -219,7 +253,7 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
     case "trying-on":
       if (event.type === "REPORT_REQUESTED" && state.tryOn.status !== "running") {
         const status = state.tryOn.status === "ready" ? "created" : state.tryOn.status === "failed" ? "unavailable" : "not-created";
-        return { ...reportFrom(state, status), generatedAt: event.generatedAt };
+        return { ...reportFrom(state, status, status === "created" ? state.styleId : null), generatedAt: event.generatedAt };
       }
       return tryOnTransition(state, event);
     case "report-ready":

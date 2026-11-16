@@ -34,6 +34,7 @@ function tryOnReturning(behavior: TryOnProvider["tryOn"]): TryOnProvider & { cal
       provider.signals.push(args[2]);
       return behavior(...args);
     },
+    thumbnail: createSimulatorTryOnProvider({ delayMs: 0 }).thumbnail,
   };
   return provider;
 }
@@ -70,7 +71,7 @@ describe("POST /v1/try-on-jobs", () => {
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOn);
     const analysisId = await analysisJobId(proxy);
 
-    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "navy-blazer" });
+    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" });
     expect(response.status).toBe(202);
     const job = await untilTerminal(proxy, parseTryOnJob(await response.json()).id);
     const result = await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${job.id}/result`, { headers: { Origin: DESKTOP_ORIGIN } });
@@ -91,7 +92,7 @@ describe("POST /v1/try-on-jobs", () => {
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOnReturning(async () => RESULT));
     const analysisId = await analysisJobId(proxy);
 
-    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "navy-blazer", ...override });
+    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo", ...override });
 
     expect(response.status).toBe(status);
     expect(parseApiErrorBody(await response.json()).error.code).toBe(code);
@@ -102,7 +103,7 @@ describe("POST /v1/try-on-jobs", () => {
     const analysisId = await analysisJobId(proxy);
     await fetch(`${proxy.baseUrl}/v1/analysis-jobs/${analysisId}`, { method: "DELETE" });
 
-    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "navy-blazer" });
+    const response = await postTryOn(proxy, { analysisJobId: analysisId, styleId: "neat-updo" });
 
     expect(parseApiErrorBody(await response.json()).error.code).toBe("JOB_NOT_FOUND");
   });
@@ -120,7 +121,7 @@ describe("try-on lifecycle", () => {
   it("cancels an in-flight try-on and aborts the provider", async () => {
     const tryOn = tryOnReturning((_image, _style, signal) => neverResolves(_image, signal) as never);
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
-    const job = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "navy-blazer" })).json());
+    const job = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" })).json());
     await waitFor(async () => (tryOn.calls ? true : undefined));
 
     const response = await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${job.id}`, { method: "DELETE" });
@@ -131,7 +132,7 @@ describe("try-on lifecycle", () => {
 
   it("deletes the stored result on reset so it cannot be fetched again (R6.2, R6.3)", async () => {
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOnReturning(async () => RESULT));
-    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "navy-blazer" })).json());
+    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" })).json());
     await untilTerminal(proxy, created.id);
 
     await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${created.id}`, { method: "DELETE" });
@@ -142,7 +143,7 @@ describe("try-on lifecycle", () => {
 
   it("purges results with the retention window", async () => {
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { jobTtlMs: 60_000 }, tryOnReturning(async () => RESULT));
-    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "navy-blazer" })).json());
+    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" })).json());
     await untilTerminal(proxy, created.id);
 
     proxy.clock.now += 60_001;
@@ -161,7 +162,7 @@ describe("try-on lifecycle", () => {
       throw new ProviderError(kind, "cloth-v4 task yc-task-1 at https://provider.invalid/out.jpg");
     });
     proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOn);
-    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "navy-blazer" })).json());
+    const created = parseTryOnJob(await (await postTryOn(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" })).json());
 
     const job = await untilTerminal(proxy, created.id);
     const raw = await (await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${created.id}`)).text();
@@ -176,11 +177,59 @@ describe("simulator try-on", () => {
     const provider = createSimulatorTryOnProvider({ delayMs: 0 });
     const image = { bytes: syntheticJpeg(1280, 720), mimeType: "image/jpeg" as const, width: 1280, height: 720 };
 
-    const first = await provider.tryOn(image, "navy-blazer", new AbortController().signal);
-    const second = await provider.tryOn(image, "navy-blazer", new AbortController().signal);
+    const first = await provider.tryOn(image, "neat-updo", new AbortController().signal);
+    const second = await provider.tryOn(image, "neat-updo", new AbortController().signal);
 
     expect(first.mimeType).toBe("image/png");
     expect(Array.from(first.bytes.subarray(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     expect(first.bytes).toEqual(second.bytes);
+  });
+});
+
+describe("GET /v1/try-on-styles/:id/thumbnail (task 12.5)", () => {
+  const thumbnail = (styleId: string) =>
+    fetch(`${proxy!.baseUrl}/v1/try-on-styles/${styleId}/thumbnail`, { headers: { Origin: DESKTOP_ORIGIN } });
+
+  it("serves a curated style preview as an image with no user data", async () => {
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, createSimulatorTryOnProvider({ delayMs: 0 }));
+
+    const response = await thumbnail("neat-updo");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=3600");
+    expect(response.headers.get("access-control-allow-origin")).toBe(DESKTOP_ORIGIN);
+    expect(new Uint8Array(await response.arrayBuffer()).subarray(0, 4)).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it.each(["navy-blazer", "female_casual_updo", "..%2F..%2Fetc"])("rejects an unknown style %s without calling the provider", async (styleId) => {
+    let calls = 0;
+    const provider = createSimulatorTryOnProvider({ delayMs: 0 });
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, {
+      ...provider,
+      thumbnail: (...args) => {
+        calls += 1;
+        return provider.thumbnail(...args);
+      },
+    });
+
+    const response = await thumbnail(styleId);
+
+    expect(response.status).toBe(404);
+    expect(calls).toBe(0);
+  });
+
+  it("maps a provider failure to a stable error", async () => {
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, {
+      ...createSimulatorTryOnProvider({ delayMs: 0 }),
+      thumbnail: async () => {
+        throw new ProviderError("unavailable");
+      },
+    });
+
+    const response = await thumbnail("short-bob");
+
+    expect(response.status).toBe(503);
+    expect(parseApiErrorBody(await response.json()).error.code).toBe("PROCESSING_UNAVAILABLE");
   });
 });

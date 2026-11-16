@@ -11,7 +11,9 @@ import {
   ERROR_CODES,
   ERROR_MESSAGES,
   ERROR_POLICY,
+  TRY_ON_CATEGORY,
   TRY_ON_STYLES,
+  suggestedStyleIds,
   JOB_INSIGHT_FIELDS,
   parseAnalysisJob,
   parseApiErrorBody,
@@ -191,11 +193,22 @@ describe("routes and catalog", () => {
       API_ROUTES.tryOnJob("to_0123456789abcdefghij"),
       API_ROUTES.tryOnResult("to_0123456789abcdefghij"),
     ];
+    expect(API_ROUTES.tryOnStyleThumbnail("neat-updo")).toBe("/v1/try-on-styles/neat-updo/thumbnail");
     for (const path of paths) expect(path).toMatch(/^\/v1\/[a-z-]+(\/[A-Za-z0-9_]+(\/result)?)?$/);
   });
 
-  it("offers exactly one curated try-on style (R6.1)", () => {
-    expect(TRY_ON_STYLES).toHaveLength(1);
+  it("offers one try-on category with at most six curated styles (R6.1)", () => {
+    expect(TRY_ON_CATEGORY).toBe("hairstyle");
+    expect(TRY_ON_STYLES.length).toBeGreaterThan(1);
+    expect(TRY_ON_STYLES.length).toBeLessThanOrEqual(6);
+    expect(new Set(TRY_ON_STYLES.map((style) => style.id)).size).toBe(TRY_ON_STYLES.length);
+  });
+
+  it("suggests styles from the job's formality only, never for an unknown formality (R6.4)", () => {
+    expect(suggestedStyleIds("formal")).toEqual(["sleek-middle-part", "neat-updo", "side-swept-cut"]);
+    expect(suggestedStyleIds("casual")).toEqual(["short-bob", "textured-comma"]);
+    expect(suggestedStyleIds("unknown")).toEqual([]);
+    for (const style of TRY_ON_STYLES) expect(style.id).not.toMatch(/male|female|men|women|boy|girl/i);
   });
 
   it("declares a contract version", () => {
