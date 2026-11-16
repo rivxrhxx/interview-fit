@@ -179,6 +179,50 @@ describe("try-on endpoints", () => {
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
   });
 
+  it("sends an idempotency key and retries once with the same key after a network failure (R4.5)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(jsonResponse({ ...tryOnSucceeded, state: "queued" }, 202));
+
+    await clientWith(fetchMock).createTryOnJob({ analysisJobId: JOB_ID, styleId: "neat-updo" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const keys = fetchMock.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers).get("Idempotency-Key"));
+    expect(keys[0]).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("cancels the try-on by its key when aborted before the job ID arrives (R4.5)", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        controller.abort();
+        throw new DOMException("aborted", "AbortError");
+      }
+      return new Response(null, { status: 204 });
+    });
+
+    await expect(
+      clientWith(fetchMock as unknown as typeof fetch).createTryOnJob({ analysisJobId: JOB_ID, styleId: "neat-updo" }, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    const [, postInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [deleteUrl, deleteInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(deleteUrl).toBe(`${BASE}/v1/try-on-jobs`);
+    expect(deleteInit.method).toBe("DELETE");
+    expect(new Headers(deleteInit.headers).get("Idempotency-Key")).toBe(new Headers(postInit.headers).get("Idempotency-Key"));
+  });
+
+  it("does not cancel by key after a definite HTTP error", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(rateLimited, 429));
+
+    await expect(clientWith(fetchMock).createTryOnJob({ analysisJobId: JOB_ID, styleId: "neat-updo" })).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("returns the result as an in-memory image blob after checking its type and signature", async () => {
     const fetchMock = vi.fn(async () => new Response(PNG, { status: 200, headers: { "Content-Type": "image/png" } }));
 

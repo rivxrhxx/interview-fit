@@ -41,11 +41,13 @@ Any network state -> error or cancelled -> previous safe state
 
 - `POST /v1/analysis-jobs`: consent version, job description, normalized image upload; returns opaque job ID.
 - `GET /v1/analysis-jobs/{id}`: normalized state and result.
-- `DELETE /v1/analysis-jobs/{id}`: cancel and schedule cleanup.
+- `DELETE /v1/analysis-jobs/{id}`: cancel, or delete a finished job's image and result (R4.7).
 - `POST /v1/job-analyses`: job description and locale (JSON); returns the job analysis. No image.
 - `GET /v1/try-on-styles`: the curated hairstyle list with suggested flags.
 - `GET /v1/try-on-styles/{id}/thumbnail`: style preview image proxied by the backend (the desktop never loads vendor URLs).
-- `POST /v1/try-on-jobs`: one curated hairstyle request for a consented analysis job.
+- `POST /v1/try-on-jobs`: one curated hairstyle request for a consented analysis job, with an `Idempotency-Key`; at most one per analysis, within the memory reservation (R4.6).
+- `DELETE /v1/try-on-jobs/{id}`: cancel, or delete a finished result.
+- `DELETE /v1/analysis-jobs` and `DELETE /v1/try-on-jobs` with an `Idempotency-Key`: cancel a job whose ID the desktop never received (R4.4, R4.5).
 
 Errors use `{ error: { code, message, retryable, correlationId } }` and never include vendor details.
 

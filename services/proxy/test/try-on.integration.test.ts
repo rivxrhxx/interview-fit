@@ -2,6 +2,7 @@
 // Task 8.1 — try-on endpoints: R6.1 (one curated style), R6.2 (result available for
 // comparison; reset via DELETE), R6.3 (no persistence beyond the temporary job), plus
 // cancellation, provider failure mapping, and provider-detail hiding.
+import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseAnalysisJob, parseApiErrorBody, parseTryOnJob, type TryOnJob } from "../../../packages/contracts/src/index.ts";
 import { stripImageMetadata } from "../src/imageInspect.ts";
@@ -273,6 +274,125 @@ describe("memory limit for try-ons (R4.6, review: 500-byte limit held 666 bytes)
     expect(refused.status).toBe(503);
     expect(parseApiErrorBody(await refused.json()).error.code).toBe("PROCESSING_UNAVAILABLE");
     expect(tryOn.calls).toBe(1);
+  });
+});
+
+describe("cancelling a try-on before its ID is known (R4.5)", () => {
+  const KEY = "idem_tryon_0123456789abcdef";
+  const hanging = () => tryOnReturning((_image, _style, signal) => neverResolves(_image, signal) as never);
+
+  function postTryOnWithKey(target: TestProxy, body: unknown, key = KEY) {
+    return fetch(`${target.baseUrl}/v1/try-on-jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: DESKTOP_ORIGIN, "Idempotency-Key": key },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function cancelByKey(target: TestProxy, key = KEY) {
+    return fetch(`${target.baseUrl}/v1/try-on-jobs`, { method: "DELETE", headers: { "Idempotency-Key": key } });
+  }
+
+  /**
+   * Opens a raw connection, sends the headers and `sent` bytes of the JSON body, then
+   * closes it without reading the response (the desktop aborting mid-request).
+   */
+  function rawPostThenDisconnect(target: TestProxy, body: unknown, sent = Number.POSITIVE_INFINITY) {
+    const payload = Buffer.from(JSON.stringify(body));
+    const { port } = new URL(target.baseUrl);
+    return new Promise<void>((resolve) => {
+      const socket = connect(Number(port), "127.0.0.1", () => {
+        socket.write(
+          `POST /v1/try-on-jobs HTTP/1.1\r\nHost: 127.0.0.1\r\nIdempotency-Key: ${KEY}\r\nContent-Type: application/json\r\nContent-Length: ${payload.length}\r\n\r\n`,
+        );
+        socket.write(payload.subarray(0, Math.min(sent, payload.length)), () => {
+          socket.destroy();
+          resolve();
+        });
+      });
+    });
+  }
+
+  it("returns the same job for a repeated key without a second provider call", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const body = { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" };
+
+    const first = parseTryOnJob(await (await postTryOnWithKey(proxy, body)).json());
+    const repeat = parseTryOnJob(await (await postTryOnWithKey(proxy, body)).json());
+
+    expect(repeat.id).toBe(first.id);
+    await waitFor(async () => (tryOn.calls === 1 ? true : undefined));
+    expect(tryOn.signals[0].aborted).toBe(false);
+  });
+
+  it("cancels a created try-on by its key and aborts the provider", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const created = parseTryOnJob(
+      await (await postTryOnWithKey(proxy, { analysisJobId: await analysisJobId(proxy), styleId: "neat-updo" })).json(),
+    );
+    await waitFor(async () => (tryOn.calls === 1 ? true : undefined));
+
+    expect((await cancelByKey(proxy)).status).toBe(204);
+
+    expect(parseTryOnJob(await (await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${created.id}`)).json()).state).toBe("cancelled");
+    expect(tryOn.signals[0].aborted).toBe(true);
+  });
+
+  it("cancels a try-on whose request arrives after the cancel, before any provider call", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+
+    expect((await cancelByKey(proxy)).status).toBe(204);
+    const created = parseTryOnJob(await (await postTryOnWithKey(proxy, { analysisJobId: analysisId, styleId: "neat-updo" })).json());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(parseTryOnJob(await (await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${created.id}`)).json()).state).toBe("cancelled");
+    expect(tryOn.calls).toBe(0);
+  });
+
+  it("creates nothing when the connection closes before the request body arrives", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+    const photoOnly = proxy.retainedBytes();
+
+    await rawPostThenDisconnect(proxy, { analysisJobId: analysisId, styleId: "neat-updo" }, 10);
+    // The cut-off body is rejected as an invalid request.
+    const posts = () => proxy!.logger.entries.filter((entry) => entry.event === "http_request" && entry.method === "POST");
+    await waitFor(async () => (posts().length === 2 ? true : undefined));
+
+    expect(posts()[1].status).toBe(422);
+
+    expect(tryOn.calls).toBe(0);
+    expect(proxy.retainedBytes()).toBe(photoOnly);
+  });
+
+  it("stops a try-on whose response the closed connection never received, through the client's cancel by key", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), { providerTimeoutMs: 10_000 }, tryOn);
+    const analysisId = await analysisJobId(proxy);
+    const photoOnly = proxy.retainedBytes();
+
+    await rawPostThenDisconnect(proxy, { analysisJobId: analysisId, styleId: "neat-updo" });
+    await waitFor(async () => (proxy!.logger.entries.some((entry) => entry.route === "/v1/try-on-jobs") ? true : undefined));
+    expect((await cancelByKey(proxy)).status).toBe(204);
+
+    await waitFor(async () => (tryOn.signals.every((signal) => signal.aborted) ? true : undefined));
+    expect(proxy.retainedBytes()).toBe(photoOnly);
+  });
+
+  it("never creates anything when cancelling by an unknown or malformed key", async () => {
+    const tryOn = hanging();
+    proxy = await startProxy(providerReturning(async () => NEUTRAL_OBSERVATIONS), {}, tryOn);
+    const photoOnly = proxy.retainedBytes();
+
+    expect((await cancelByKey(proxy, "idem_unknown_0123456789abcdef")).status).toBe(204);
+    expect((await cancelByKey(proxy, "x")).status).toBe(204);
+    expect(tryOn.calls).toBe(0);
+    expect(proxy.retainedBytes()).toBe(photoOnly);
   });
 });
 
