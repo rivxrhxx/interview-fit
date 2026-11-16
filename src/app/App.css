@@ -507,3 +507,88 @@ main:focus-visible {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Observations and suggestions */
+.observation-category {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.observation-assessment {
+  color: var(--text-subtle);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cue-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cue-list li {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.cue-label {
+  font-weight: 700;
+}
+
+.cue-evidence {
+  color: var(--text-muted);
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestion-list li {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.suggestion-list h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.suggestion-list dl {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.suggestion-list dt {
+  color: var(--text-subtle);
+  font-weight: 700;
+}
+
+.suggestion-list dd {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .suggestion-list dl {
+    grid-template-columns: 1fr;
+  }
+}
