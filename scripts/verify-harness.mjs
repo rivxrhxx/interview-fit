@@ -43,6 +43,7 @@ const forbiddenPatterns = [
   /Authorization:\s*Bearer\s+[A-Za-z0-9._-]{12,}/gi,
   /YOUCAM_(API_)?KEY\s*=\s*[^\s#]+/gi,
   /PERFECTCORP_(API_)?KEY\s*=\s*[^\s#]+/gi,
+  /ANTHROPIC_(API_)?KEY\s*=\s*[^\s#]+/gi,
 ];
 const scanTargets = [
   "README.md",
