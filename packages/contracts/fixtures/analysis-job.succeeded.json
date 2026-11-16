@@ -1,0 +1,39 @@
+{
+  "id": "an_7Qm2Lx9Pz4Rk8Vt1Ns6Bc3",
+  "state": "succeeded",
+  "createdAt": "2026-11-16T09:00:00.000Z",
+  "expiresAt": "2026-11-16T09:15:00.000Z",
+  "error": null,
+  "result": {
+    "generatedAt": "2026-11-16T09:00:12.000Z",
+    "jobContext": {
+      "summary": "Client-facing consulting role with video interviews.",
+      "cues": [
+        { "id": "client-facing", "label": "Client-facing work", "evidence": "present findings to clients" },
+        { "id": "video-interview", "label": "Video interview", "evidence": "interviews are held over video" }
+      ]
+    },
+    "observations": [
+      { "id": "obs_lighting", "category": "lighting", "text": "The light source appears to be behind you." },
+      { "id": "obs_framing", "category": "framing", "text": "Your head and shoulders are centered in the frame." }
+    ],
+    "recommendations": [
+      {
+        "id": "rec_front_light",
+        "category": "lighting",
+        "observationId": "obs_lighting",
+        "adjustment": "Consider facing a window or adding a soft front light for clearer video.",
+        "rationale": "The posting says interviews are held over video, where even front lighting helps the other person see you clearly.",
+        "cueIds": ["video-interview"]
+      },
+      {
+        "id": "rec_attire_client",
+        "category": "attire",
+        "observationId": null,
+        "adjustment": "Consider a structured layer such as a blazer if that feels comfortable for you.",
+        "rationale": "The posting mentions presenting findings to clients, a setting where business attire is common.",
+        "cueIds": ["client-facing"]
+      }
+    ]
+  }
+}

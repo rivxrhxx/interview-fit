@@ -1,0 +1,13 @@
+{
+  "id": "an_7Qm2Lx9Pz4Rk8Vt1Ns6Bc3",
+  "state": "failed",
+  "createdAt": "2026-11-16T09:00:00.000Z",
+  "expiresAt": "2026-11-16T09:01:30.000Z",
+  "result": null,
+  "error": {
+    "code": "PROCESSING_TIMEOUT",
+    "message": "Analysis took too long and was stopped. You can try again.",
+    "retryable": true,
+    "correlationId": "req_Hk3Zp8Wq2Lm5Ts9V"
+  }
+}

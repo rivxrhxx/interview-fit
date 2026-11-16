@@ -1,7 +1,9 @@
+import type { ErrorCode } from "../api/contracts";
+
 export type SupportedImageType = "image/jpeg" | "image/png";
 
 /** Client-visible image error codes shared with the native and backend boundaries. */
-export type ImageErrorCode = "IMAGE_INVALID" | "IMAGE_TOO_LARGE" | "INTERNAL_ERROR";
+export type ImageErrorCode = Extract<ErrorCode, "IMAGE_INVALID" | "IMAGE_TOO_LARGE" | "INTERNAL_ERROR">;
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];

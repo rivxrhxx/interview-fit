@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "PROCESSING_UNAVAILABLE",
+    "message": "Analysis is temporarily unavailable. Try again in a few minutes.",
+    "retryable": true,
+    "correlationId": "req_Pq7Wn2Xc5Rv8Lk1M"
+  }
+}
