@@ -446,3 +446,64 @@ main:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Analysis */
+.analysis-progress {
+  max-width: 640px;
+}
+
+.progress-bar {
+  height: 6px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.progress-bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .progress-bar span {
+    animation: progress-slide 1.4s ease-in-out infinite;
+  }
+
+  @keyframes progress-slide {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+}
+
+.observation-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.observation-list li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.observation-category {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

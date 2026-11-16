@@ -1,4 +1,4 @@
-import { JOB_DESCRIPTION_MAX_LENGTH } from "../../lib/validation/limits";
+import { checkJobDescription } from "../../lib/api/contracts";
 
 declare const validatedBrand: unique symbol;
 
@@ -19,23 +19,13 @@ export type JobDescriptionError =
 
 export type JobDescriptionResult = { ok: true; value: JobDescription } | { ok: false; error: JobDescriptionError };
 
-// C0 control characters except tab (\u0009) and line feed (\u000A), plus DEL and C1 controls.
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
-
-export function normalizeJobDescription(raw: string): string {
-  return raw.normalize("NFC").replace(/\r\n?/g, "\n").replace(CONTROL_CHARACTERS, "").trim();
-}
+export { normalizeJobDescription } from "../../lib/api/contracts";
 
 export function validateJobDescription(raw: string): JobDescriptionResult {
-  const text = normalizeJobDescription(raw);
-  if (text.length === 0) return { ok: false, error: { code: "JOB_DESCRIPTION_EMPTY" } };
-  if (text.length > JOB_DESCRIPTION_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: { code: "JOB_DESCRIPTION_TOO_LONG", maxLength: JOB_DESCRIPTION_MAX_LENGTH, length: text.length },
-    };
-  }
-  return { ok: true, value: { text, length: text.length } as JobDescription };
+  const check = checkJobDescription(raw);
+  if (check.ok) return { ok: true, value: { text: check.text, length: check.text.length } as JobDescription };
+  if (check.reason === "empty") return { ok: false, error: { code: "JOB_DESCRIPTION_EMPTY" } };
+  return { ok: false, error: { code: "JOB_DESCRIPTION_TOO_LONG", maxLength: check.maxLength, length: check.length } };
 }
 
 const numberFormat = new Intl.NumberFormat("en-US");

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AdaptersProvider, type Adapters } from "../../lib/adapters";
 import { CameraError, type CameraAdapter } from "../../lib/media/camera";
+import { createMockAdapters } from "../../test/adapters";
 import { JPEG_SIGNATURE, syntheticFile } from "../../test/images";
 import { fakeStream, setVisibility } from "../../test/media";
 import { PhotoPicker } from "./PhotoPicker";
@@ -14,14 +15,13 @@ frameBytes.set(JPEG_SIGNATURE);
 
 function setup(camera: Partial<CameraAdapter> = {}) {
   const { stream, tracks } = fakeStream();
-  const adapters: Adapters = {
-    image: { prepare: vi.fn(async () => new Blob(["normalized"], { type: "image/jpeg" })) },
+  const adapters: Adapters = createMockAdapters({
     camera: {
       open: vi.fn(async () => stream),
       captureFrame: vi.fn(async () => new Blob([frameBytes], { type: "image/jpeg" })),
       ...camera,
     },
-  };
+  });
   const onImageReady = vi.fn();
   const fetchSpy = vi.spyOn(globalThis, "fetch");
   const user = userEvent.setup();
