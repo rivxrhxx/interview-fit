@@ -64,7 +64,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: source photo absent by default
   - Verify: report tests and manual save-dialog smoke
 
-- [ ] 10.1 Complete accessibility and failure states
+- [x] 10.1 Complete accessibility and failure states
   - Requirements: R8.1, R8.2, R8.3
   - Verify: automated accessibility checks and keyboard walkthrough
 
