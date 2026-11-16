@@ -58,3 +58,71 @@ export function inspectImage(bytes: Uint8Array): ImageInspection {
   if (dimensions.width * dimensions.height > IMAGE_MAX_PIXELS) return { ok: false, code: "IMAGE_TOO_LARGE" };
   return { ok: true, info: { mimeType: png ? "image/png" : "image/jpeg", ...dimensions } };
 }
+
+// JPEG segments that may carry personal metadata: APP1–APP13, APP15 (Exif, XMP, ICC, IPTC, …) and comments.
+// APP0 (JFIF) and APP14 (Adobe color transform) are kept because decoders need them.
+function isJpegMetadataMarker(marker: number): boolean {
+  return (marker >= 0xe1 && marker <= 0xed) || marker === 0xef || marker === 0xfe;
+}
+
+function stripJpeg(bytes: Uint8Array): Uint8Array | null {
+  const parts: Uint8Array[] = [bytes.subarray(0, 2)];
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 0xff) return null;
+    const marker = bytes[offset + 1];
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      parts.push(bytes.subarray(offset, offset + 2));
+      offset += 2;
+      continue;
+    }
+    const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+    if (length < 2 || offset + 2 + length > bytes.length) return null;
+    if (marker === 0xda) {
+      // Start of scan: the rest is entropy-coded image data and the end marker.
+      parts.push(bytes.subarray(offset));
+      return concat(parts);
+    }
+    if (!isJpegMetadataMarker(marker)) parts.push(bytes.subarray(offset, offset + 2 + length));
+    offset += 2 + length;
+  }
+  return null;
+}
+
+// Critical chunks plus ancillary chunks needed for correct rendering. Text, eXIf, and time chunks are dropped.
+const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "sBIT", "bKGD"]);
+
+function stripPng(bytes: Uint8Array): Uint8Array | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const parts: Uint8Array[] = [bytes.subarray(0, 8)];
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = view.getUint32(offset);
+    const end = offset + 12 + length;
+    if (end > bytes.length) return null;
+    const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    if (PNG_KEEP.has(type)) parts.push(bytes.subarray(offset, end));
+    offset = end;
+    if (type === "IEND") return concat(parts);
+  }
+  return null;
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+/**
+ * Removes metadata segments before anything reaches the provider. The desktop
+ * already re-encodes images; this guards against modified or third-party
+ * clients (R3.3 defense in depth). Returns null for structurally invalid input.
+ */
+export function stripImageMetadata(bytes: Uint8Array, mimeType: ImageInfo["mimeType"]): Uint8Array | null {
+  return mimeType === "image/jpeg" ? stripJpeg(bytes) : stripPng(bytes);
+}

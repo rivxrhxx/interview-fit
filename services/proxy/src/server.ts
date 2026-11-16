@@ -15,7 +15,7 @@ import type { ProxyConfig } from "./config.ts";
 import { observationOnlyGuidance, type GuidanceEngine } from "./guidance.ts";
 import { BodyTooLargeError, parseMultipart, readBody } from "./http/body.ts";
 import { newCorrelationId } from "./ids.ts";
-import { inspectImage } from "./imageInspect.ts";
+import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
 import { createAnalysisJobs } from "./jobs/analysisJobs.ts";
 import { createJobStore, type AnalysisJobRecord, type JobStore } from "./jobs/store.ts";
 import type { Logger } from "./logger.ts";
@@ -167,8 +167,11 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const image = new Uint8Array(await file.arrayBuffer());
     const inspection = inspectImage(image);
     if (!inspection.ok) throw new HttpError(inspection.code);
+    const clean = stripImageMetadata(image, inspection.info.mimeType);
+    image.fill(0);
+    if (!clean) throw new HttpError("IMAGE_INVALID");
 
-    return jobs.create({ jobDescription: job.text, image, imageInfo: inspection.info });
+    return jobs.create({ jobDescription: job.text, image: clean, imageInfo: inspection.info });
   }
 
   async function route(request: IncomingMessage, response: ServerResponse, cors: Record<string, string>) {
