@@ -42,7 +42,7 @@ export const en = {
     consenting: {
       label: "Consent",
       heading: "Review how your photo is used",
-      description: "Nothing leaves your device until you agree below.",
+      description: "No photo leaves your device until you agree below.",
     },
     analyzing: {
       label: "Analysis",
@@ -67,7 +67,7 @@ export const en = {
     error: {
       label: "Interrupted",
       heading: "That step could not be completed",
-      description: "Nothing was saved. Choose how you'd like to continue.",
+      description: "Nothing was saved by Interview Fit. Choose how you'd like to continue.",
     },
   } satisfies Record<string, StepCopy>,
   errors: ERROR_MESSAGES as Record<ErrorCode, string>,
