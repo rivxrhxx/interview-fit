@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createHttpApiClient } from "../../../src/lib/api/client.ts";
 import { createConsentRecord } from "../../../src/features/consent/consent.ts";
 import { runAnalysis } from "../../../src/features/analysis/runAnalysis.ts";
-import { createSimulatorProvider } from "../src/providers/simulator.ts";
+import { runTryOn } from "../../../src/features/try-on/runTryOn.ts";
+import { createSimulatorProvider, createSimulatorTryOnProvider } from "../src/providers/simulator.ts";
 import { neverResolves, providerReturning, startProxy, syntheticJpeg, waitFor, type TestProxy } from "./helpers.ts";
 
 let proxy: TestProxy | undefined;
@@ -73,5 +74,37 @@ describe("desktop client ↔ proxy", () => {
     proxy = await startProxy(createSimulatorProvider({ delayMs: 5, scenario: "unavailable" }));
 
     expect(await run(proxy)).toEqual({ status: "failed", code: "PROCESSING_UNAVAILABLE" });
+  });
+});
+
+describe("desktop try-on ↔ proxy (simulator)", () => {
+  it("previews the curated style from the consented analysis and deletes the result on reset", async () => {
+    proxy = await startProxy(
+      createSimulatorProvider({ delayMs: 5, scenario: "success" }),
+      {},
+      createSimulatorTryOnProvider({ delayMs: 5 }),
+    );
+    const analysis = await run(proxy);
+    if (analysis.status !== "succeeded") throw new Error("analysis should succeed");
+    const api = createHttpApiClient({ baseUrl: proxy.baseUrl });
+    let tryOnId = "";
+
+    const outcome = await runTryOn({
+      api,
+      analysisJobId: analysis.jobId,
+      styleId: "navy-blazer",
+      signal: new AbortController().signal,
+      pollIntervalMs: 10,
+      timeoutMs: 2_000,
+      onJobCreated: (id) => (tryOnId = id),
+    });
+
+    expect(outcome.status).toBe("succeeded");
+    if (outcome.status !== "succeeded") return;
+    expect(outcome.preview.type).toBe("image/png");
+    expect(outcome.preview.size).toBeGreaterThan(100);
+
+    await api.cancelTryOnJob(tryOnId as never);
+    expect((await fetch(`${proxy.baseUrl}/v1/try-on-jobs/${tryOnId}/result`)).status).toBe(404);
   });
 });

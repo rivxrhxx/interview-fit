@@ -54,7 +54,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: prohibited claims and prompt-injection attempts
   - Verify: recommendation policy suite
 
-- [ ] 8.1 Implement one curated virtual try-on
+- [x] 8.1 Implement one curated virtual try-on
   - Requirements: R6.1, R6.2, R6.3
   - Tests first: compare, reset, cancellation, no implicit persistence
   - Verify: integration suite

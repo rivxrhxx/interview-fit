@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PreparedImage } from "./types";
-import { useObjectUrl } from "./useObjectUrl";
+import { useObjectUrl } from "../../lib/media/useObjectUrl";
 
 interface PhotoPreviewProps {
   image: PreparedImage;
