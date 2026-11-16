@@ -3,7 +3,7 @@ import { deflateSync } from "node:zlib";
 import { CURRENT_CONSENT_VERSION, type Observation } from "../../../packages/contracts/src/index.ts";
 import { loadConfig, type ProxyConfig } from "../src/config.ts";
 import type { LogEntry, Logger } from "../src/logger.ts";
-import type { AnalysisProvider, ProviderImage } from "../src/providers/types.ts";
+import type { AnalysisProvider, ProviderImage, TryOnProvider } from "../src/providers/types.ts";
 import { createProxy, type Proxy } from "../src/server.ts";
 
 export const DESKTOP_ORIGIN = "tauri://localhost";
@@ -108,11 +108,12 @@ export interface TestProxy extends Proxy {
 export async function startProxy(
   provider: AnalysisProvider,
   overrides: Partial<ProxyConfig> = {},
+  tryOnProvider?: TryOnProvider,
 ): Promise<TestProxy> {
   const logger = memoryLogger();
   const clock = { now: Date.parse("2026-11-16T09:00:00.000Z") };
   const config = { ...loadConfig({}), providerTimeoutMs: 200, sweepIntervalMs: 0, ...overrides };
-  const proxy = createProxy({ config, provider, logger, now: () => clock.now });
+  const proxy = createProxy({ config, provider, tryOnProvider, logger, now: () => clock.now });
   await new Promise<void>((resolve) => proxy.server.listen(0, "127.0.0.1", resolve));
   const { port } = proxy.server.address() as AddressInfo;
   return {

@@ -1,6 +1,7 @@
 import type { Observation } from "../../../../packages/contracts/src/index.ts";
+import { encodePng } from "../png.ts";
 import { captureBasics } from "./captureBasics.ts";
-import { ProviderError, type AnalysisProvider, type ProviderImage } from "./types.ts";
+import { ProviderError, type AnalysisProvider, type ProviderImage, type TryOnProvider } from "./types.ts";
 
 export type SimulatorScenario = "success" | "timeout" | "unavailable" | "rate-limited" | "malformed";
 
@@ -50,6 +51,52 @@ export function createSimulatorProvider(options: { delayMs: number; scenario: Si
         default:
           return simulatedObservations(image);
       }
+    },
+  };
+}
+
+const NAVY = [31, 45, 82];
+const SHIRT = [236, 238, 242];
+const FIGURE = [150, 156, 168];
+const BACKDROP = [214, 219, 228];
+
+/**
+ * Draws an illustrative mannequin in a navy blazer (no user pixels, no licensed
+ * assets). Used for deterministic demos; the live provider returns a real try-on.
+ */
+function renderBlazerIllustration(width: number, height: number): Uint8Array {
+  const rgb = new Uint8Array(width * height * 3);
+  const cx = width / 2;
+  const headR = height * 0.12;
+  const headY = height * 0.3;
+  const shoulderY = height * 0.52;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let color = BACKDROP;
+      const dx = x - cx;
+      if (dx * dx + (y - headY) ** 2 <= headR * headR) color = FIGURE;
+      else if (y > headY + headR * 0.8 && y < shoulderY && Math.abs(dx) < headR * 0.45) color = FIGURE;
+      else if (y >= shoulderY) {
+        const halfWidth = width * 0.22 + (y - shoulderY) * 0.35;
+        if (Math.abs(dx) < halfWidth) {
+          // A V-shaped shirt opening between the lapels.
+          const opening = Math.max(0, headR * 0.9 - (y - shoulderY) * 0.45);
+          color = Math.abs(dx) < opening ? SHIRT : NAVY;
+        }
+      }
+      rgb.set(color, (y * width + x) * 3);
+    }
+  }
+  return rgb;
+}
+
+export function createSimulatorTryOnProvider(options: { delayMs: number }): TryOnProvider {
+  return {
+    async tryOn(image, _style, signal) {
+      await delay(options.delayMs, signal);
+      const width = 480;
+      const height = Math.max(240, Math.min(960, Math.round((width * image.height) / image.width)));
+      return { bytes: encodePng(width, height, renderBlazerIllustration(width, height)), mimeType: "image/png" };
     },
   };
 }

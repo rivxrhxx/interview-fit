@@ -12,11 +12,12 @@ import type { Logger } from "../logger.ts";
 import { ProviderError, type AnalysisProvider, type ProviderErrorKind } from "../providers/types.ts";
 import type { AnalysisJobRecord, JobStore } from "./store.ts";
 
-const PROVIDER_ERROR_CODES: Record<ProviderErrorKind, ErrorCode> = {
+export const PROVIDER_ERROR_CODES: Record<ProviderErrorKind, ErrorCode> = {
   "rate-limited": "RATE_LIMITED",
   unavailable: "PROCESSING_UNAVAILABLE",
   timeout: "PROCESSING_TIMEOUT",
   "invalid-image": "IMAGE_INVALID",
+  "unsuitable-image": "IMAGE_UNSUITABLE",
   "malformed-response": "INTERNAL_ERROR",
 };
 
@@ -36,14 +37,14 @@ export interface AnalysisJobs {
   cancel(id: AnalysisJobId): AnalysisJobRecord | undefined;
 }
 
-function toErrorCode(error: unknown): ErrorCode {
+export function toErrorCode(error: unknown): ErrorCode {
   if (error instanceof ProviderError) return PROVIDER_ERROR_CODES[error.kind];
   if (error instanceof ContractError) return "INTERNAL_ERROR";
   return "INTERNAL_ERROR";
 }
 
 /** Races the provider against a hard deadline so a stalled provider cannot hold a job open (R4.3). */
-function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, controller: AbortController, ms: number): Promise<T> {
+export function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, controller: AbortController, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {

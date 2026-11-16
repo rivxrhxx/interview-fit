@@ -13,6 +13,8 @@ export interface YouCamClient {
   uploadImage(image: ProviderImage, signal: AbortSignal): Promise<string>;
   createTask(tool: string, body: Record<string, unknown>, signal: AbortSignal): Promise<string>;
   waitForTask(tool: string, taskId: string, signal: AbortSignal): Promise<TaskOutcome>;
+  /** Downloads a result from a pre-signed https URL without credentials. */
+  downloadResult(url: unknown, maxBytes: number, signal: AbortSignal): Promise<Uint8Array>;
 }
 
 interface Reply {
@@ -144,6 +146,34 @@ export function createYouCamClient(options: { config: YouCamConfig; logger: Logg
       const taskId = nonEmptyString(record(record(created.body)?.data)?.task_id);
       if (!taskId) throw new ProviderError("malformed-response");
       return taskId;
+    },
+
+    async downloadResult(url, maxBytes, signal) {
+      const location = nonEmptyString(url);
+      let parsed: URL | null = null;
+      try {
+        parsed = location ? new URL(location) : null;
+      } catch {
+        parsed = null;
+      }
+      if (!location || !parsed || parsed.protocol !== "https:" || parsed.username || parsed.password) {
+        throw new ProviderError("malformed-response");
+      }
+      let response: Response;
+      try {
+        response = await fetchImpl(location, { method: "GET", redirect: "error", signal });
+      } catch {
+        if (signal.aborted) throw signal.reason;
+        logger.log({ level: "warn", event: "provider_request", operation: "result_download", status: 0 });
+        throw new ProviderError("unavailable");
+      }
+      logger.log({ level: response.ok ? "info" : "warn", event: "provider_request", operation: "result_download", status: response.status });
+      if (response.status !== 200) throw new ProviderError("malformed-response");
+      const declared = Number(response.headers.get("content-length") ?? "0");
+      if (declared > maxBytes) throw new ProviderError("malformed-response");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > maxBytes) throw new ProviderError("malformed-response");
+      return bytes;
     },
 
     async waitForTask(tool, taskId, signal) {

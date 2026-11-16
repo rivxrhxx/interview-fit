@@ -8,6 +8,8 @@ export const FAKE_BASE_URL = "https://youcam.test";
 export const FAKE_FILE_ID = "yc-file-7f3a9c";
 export const FAKE_TASK_ID = "yc-task-b41d2e";
 export const FAKE_UPLOAD_URL = `https://upload.youcam-storage.test/put/${FAKE_FILE_ID}?signature=sig-91ab`;
+export const FAKE_RESULT_URL = "https://results.youcam-storage.test/out/yc-result-55e1.jpg?signature=sig-77cd";
+export const FAKE_REF_URL = "https://assets.interview-fit.test/garments/navy-blazer.png";
 
 export interface RecordedRequest {
   method: string;
@@ -24,6 +26,12 @@ export interface FakeYouCamOptions {
   createReply?: Reply;
   /** Successive poll replies; the last one repeats. */
   pollReplies?: Reply[];
+  /** Raw bytes (or failure) served at the result URL. */
+  resultReply?: { status: number; bytes: Uint8Array; contentType?: string } | "network-error";
+}
+
+export function clothSuccess(url = FAKE_RESULT_URL) {
+  return { status: 200, data: { task_status: "success", error: null, results: { url } } };
 }
 
 export const FACE_ATTR_SUCCESS = {
@@ -94,10 +102,19 @@ export function fakeYouCam(options: FakeYouCamOptions = {}) {
       );
     }
     if (method === "PUT" && url === FAKE_UPLOAD_URL) return respond(options.uploadReply ?? { status: 200 });
-    if (method === "POST" && url === `${FAKE_BASE_URL}/s2s/v2.0/task/face-attr-analysis`) {
+    const tool = /\/s2s\/v2\.0\/task\/(face-attr-analysis|cloth-v4)(\/|$)/.exec(url)?.[1];
+    if (method === "POST" && tool && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}`) {
       return respond(options.createReply ?? { status: 200, body: { status: 200, data: { task_id: FAKE_TASK_ID } } });
     }
-    if (method === "GET" && url === `${FAKE_BASE_URL}/s2s/v2.0/task/face-attr-analysis/${FAKE_TASK_ID}`) {
+    if (method === "GET" && url === FAKE_RESULT_URL) {
+      const reply = options.resultReply ?? { status: 200, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) };
+      if (reply === "network-error") throw new TypeError("fetch failed");
+      return new Response(reply.bytes as Uint8Array<ArrayBuffer>, {
+        status: reply.status,
+        headers: { "Content-Type": reply.contentType ?? "image/jpeg" },
+      });
+    }
+    if (method === "GET" && tool && url === `${FAKE_BASE_URL}/s2s/v2.0/task/${tool}/${FAKE_TASK_ID}`) {
       const reply = pollReplies[Math.min(polls, pollReplies.length - 1)];
       polls += 1;
       return respond(reply === "network-error" ? reply : { status: (reply as { status: number }).status, body: reply });
