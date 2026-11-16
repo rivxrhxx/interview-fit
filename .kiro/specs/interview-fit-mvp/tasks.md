@@ -119,7 +119,7 @@ From an external review before submission.
   - Tests first: consent step says no photo leaves before agreement; error step names Interview Fit; English and Korean
   - Verify: `npm run verify:fast`
 
-- [ ] 13.3 Keep try-on results within the backend memory limit
+- [x] 13.3 Keep try-on results within the backend memory limit
   - Requirements: R4.6
   - Tests first: reservation refused before start, oversized result discarded, retained bytes never exceed the limit, one try-on in progress per analysis, global in-progress cap
   - Verify: `npm run verify:fast`

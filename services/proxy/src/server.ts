@@ -25,7 +25,7 @@ import { newCorrelationId } from "./ids.ts";
 import { inspectImage, stripImageMetadata } from "./imageInspect.ts";
 import { createAnalysisJobs, toErrorCode, withDeadline } from "./jobs/analysisJobs.ts";
 import { createJobStore, type AnalysisJobRecord, type JobStore } from "./jobs/store.ts";
-import { createTryOnJobs, type TryOnJobRecord } from "./jobs/tryOnJobs.ts";
+import { TryOnCapacityError, createTryOnJobs, type TryOnJobRecord, type TryOnJobs } from "./jobs/tryOnJobs.ts";
 import type { Logger } from "./logger.ts";
 import type { AnalysisProvider, TryOnProvider } from "./providers/types.ts";
 import { createRateLimiter } from "./rateLimit.ts";
@@ -55,6 +55,8 @@ export interface ProxyDeps {
 export interface Proxy {
   server: Server;
   store: JobStore;
+  /** Image bytes held for analyses and try-ons, including try-on reservations (diagnostics). */
+  retainedBytes(): number;
   shutdown(): void;
 }
 
@@ -142,7 +144,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
     terminalRetentionMs: config.terminalRetentionMs,
     providerTimeoutMs: config.providerTimeoutMs,
   });
-  const tryOns = deps.tryOnProvider
+  const tryOns: TryOnJobs | null = deps.tryOnProvider
     ? createTryOnJobs({
         provider: deps.tryOnProvider,
         logger,
@@ -150,9 +152,15 @@ export function createProxy(deps: ProxyDeps): Proxy {
         jobTtlMs: config.jobTtlMs,
         terminalRetentionMs: config.terminalRetentionMs,
         providerTimeoutMs: config.providerTimeoutMs,
+        maxActive: config.maxActiveTryOns,
+        fits: (bytes: number): boolean => retainedBytes() + bytes <= config.maxRetainedBytes,
       })
     : null;
   tryOnCascade = (id) => tryOns?.removeForAnalysis(id);
+  /** Every image byte held in memory: analysis photos, try-on results, and running try-on reservations (R4.6). */
+  function retainedBytes(): number {
+    return store.retainedBytes() + (tryOns?.retainedBytes() ?? 0);
+  }
   const limiter = createRateLimiter({ limit: config.rateLimitPerMinute, windowMs: 60_000, now });
   // Text-only analyses and catalog thumbnails get their own buckets so they never use up uploads.
   const analysisLimiter = createRateLimiter({ limit: config.rateLimitPerMinute * 3, windowMs: 60_000, now });
@@ -253,7 +261,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
     const clean = stripImageMetadata(image, inspection.info.mimeType);
     image.fill(0);
     if (!clean) throw new HttpError("IMAGE_INVALID");
-    if (store.retainedBytes() + (tryOns?.retainedBytes() ?? 0) + clean.length > config.maxRetainedBytes) {
+    if (retainedBytes() + clean.length > config.maxRetainedBytes) {
       clean.fill(0);
       throw new HttpError("PROCESSING_UNAVAILABLE");
     }
@@ -342,7 +350,13 @@ export function createProxy(deps: ProxyDeps): Proxy {
     // Only a successful, still-retained, consented analysis image can be used (R6.1).
     if (analysis.state !== "succeeded" || !analysis.image || !analysis.imageInfo) throw new HttpError("JOB_NOT_FOUND");
     if (!tryOns) throw new HttpError("PROCESSING_UNAVAILABLE");
-    return tryOns.create(analysis, fields.styleId as TryOnStyleId);
+    try {
+      return tryOns.create(analysis, fields.styleId as TryOnStyleId);
+    } catch (error) {
+      if (!(error instanceof TryOnCapacityError)) throw error;
+      logger.log({ level: "warn", event: "try_on_refused", reason: error.reason });
+      throw new HttpError("PROCESSING_UNAVAILABLE");
+    }
   }
 
   function sendImage(response: ServerResponse, bytes: Uint8Array, mimeType: string, headers: Record<string, string>) {
@@ -555,6 +569,7 @@ export function createProxy(deps: ProxyDeps): Proxy {
   return {
     server,
     store,
+    retainedBytes,
     shutdown() {
       if (sweeper) clearInterval(sweeper);
       tryOns?.clear();

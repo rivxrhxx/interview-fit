@@ -16,6 +16,8 @@ export interface ProxyConfig {
   maxLiveJobs: number;
   /** Upper bound on image bytes held in memory across all jobs and try-on results. */
   maxRetainedBytes: number;
+  /** Try-ons queued or processing at once across all analyses (one per analysis). */
+  maxActiveTryOns: number;
   provider: "simulator" | "youcam";
   simulator: { delayMs: number; scenario: SimulatorScenario };
 }
@@ -48,6 +50,7 @@ export function loadConfig(env: Record<string, string | undefined>): ProxyConfig
     sweepIntervalMs: integer(env.SWEEP_INTERVAL_MS, 30_000, 1_000),
     maxLiveJobs: integer(env.MAX_LIVE_JOBS, 50, 1),
     maxRetainedBytes: integer(env.MAX_RETAINED_BYTES, 256 * 1024 * 1024, 1),
+    maxActiveTryOns: integer(env.MAX_ACTIVE_TRY_ONS, 3, 1),
     provider,
     simulator: { delayMs: integer(env.SIMULATOR_DELAY_MS, 1_200, 0), scenario },
   };
