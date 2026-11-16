@@ -30,7 +30,7 @@ Only mark a task complete after its verification command passes and evidence is 
   - Tests first: permission denied, cancel, navigation, background
   - Verify: desktop integration test
 
-- [ ] 5.1 Implement just-in-time consent gate
+- [x] 5.1 Implement just-in-time consent gate
   - Requirements: R3.1, R3.2
   - Tests first: decline causes zero upload bytes; version changes invalidate consent
   - Verify: privacy test suite
