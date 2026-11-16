@@ -40,3 +40,4 @@ local-reports
 
 # Generated synthetic demo assets (npm run demo:photo)
 demo-assets/
+*.tsbuildinfo
