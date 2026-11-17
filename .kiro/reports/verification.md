@@ -104,3 +104,19 @@ A separate read-only reviewer then checked these fixes and reported 2 medium and
 | Low | Cancel-by-key tombstones were unbounded | At most 1,024, oldest dropped first |
 
 The reviewer also noted that a provider ignoring cancellation could leave a result on a removed try-on; removed try-ons are now marked ended so a late result is zeroed.
+
+## Task 14.1 (R2.5) — camera capture button disabled until video ready (2026-11-17)
+
+| Step | Command | Result |
+|---|---|---|
+| Red (pre-implementation) | `npx vitest run src/features/capture/CameraCapture.test.tsx` | 2 failed of 12: "keeps Take Photo disabled while the stream is live but readyState is HAVE_METADATA (1) with 0×0 dimensions" and "keeps Take Photo disabled if an event fires while dimensions are still 0". The readyState-2 enable case passed before the change because the button was unconditionally enabled on `phase === "live"`. |
+| Green (post-implementation) | `npx vitest run src/features/capture` | 23/23 passed (3 files) |
+| Full suite | `npm run verify:fast` | Pass: harness ✓, secret scan ✓, typecheck ✓, 543 tests in 40 files ✓ |
+
+Changes: `src/features/capture/CameraCapture.tsx` (`videoReady` state, `checkReady`, four event listeners with cleanup, `setVideoReady(false)` in `stopTracks`, `disabled={phase !== "live" || !videoReady}`); `src/features/capture/CameraCapture.test.tsx` (new `describe("video readiness gate (R2.5)")` block, `startCamera` updated to call `makeVideoReady`); `src/test/media.ts` (`makeVideoReady` helper).
+
+Evidence: `.kiro/reports/evidence/2026-11-17-kiro-cli-task-14.1.txt`
+
+## Task 13.1 — live hook run (2026-11-17)
+
+Both workspace hooks fired during the Kiro CLI 3.4.0 headless run (`kiro-cli chat --v3 --no-interactive`) that implemented task 14.1. On each `PostFileSave` for a file under `src/features/capture/`, the "Privacy boundary review" hook ran `.kiro/prompts/privacy-review.md` against the diff and reported no release-blocking findings. The "TypeScript quality gate" hook fired on every `.ts`/`.tsx` save and ran `npm run verify:fast`; the final run exited 0 (543 tests). Transcripts are in `.kiro/reports/evidence/2026-11-17-kiro-cli-task-14.1.txt`. A screen recording for the demo is optional and not required for this checkbox.

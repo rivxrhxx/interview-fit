@@ -109,10 +109,10 @@ Approved by the project owner: skin analysis as prep tips only, a hairstyle try-
 
 From an external review before submission.
 
-- [ ] 13.1 Migrate Kiro hooks to the v1 format and record a live run
+- [x] 13.1 Migrate Kiro hooks to the v1 format and record a live run
   - Requirements: R9.3
   - Tests first: harness verifier rejects legacy `.kiro.hook` files, unknown triggers, missing actions, and invalid matchers, and checks each matcher against sample paths
-  - Verify: `npm run verify:harness`, then a recorded hook run in Kiro (pending: needs the Kiro app)
+  - Verify: `npm run verify:harness`; live hook run recorded in `.kiro/reports/evidence/2026-11-17-kiro-cli-task-14.1.txt`
 
 - [x] 13.2 Make consent and error copy match the actual data flow
   - Requirements: R3.5
@@ -147,15 +147,15 @@ Blockers identified by the external review before submission. Blockers 1–6 are
 
 | Blocker | Requirement | Covered by | Evidence |
 |---------|-------------|------------|----------|
-| 1 — Hooks schema migration | R9.3 | Task 13.1 (open) | Both hooks are `v1`; verifier checks schema; task open only for live-run evidence |
+| 1 — Hooks schema migration | R9.3 | Task 13.1 ✓ | Both hooks are `v1`; verifier checks schema; live run in `.kiro/reports/evidence/2026-11-17-kiro-cli-task-14.1.txt` |
 | 2 — Consent and error copy | R3.5 | Task 13.2 ✓ | `consent.privacy.test.tsx`: R3.5 copy tests in en and ko pass |
 | 3 — Memory limit and live-job cap | R4.6 | Task 13.3 ✓ | `try-on.integration.test.ts`: four reservation/capacity cases pass |
 | 4 — Idempotency and cancel-by-key | R4.5 | Task 13.4 ✓ | `try-on.integration.test.ts`: tombstone, pre-create DELETE, disconnect abort |
 | 5 — Cascade delete analysis result | R4.7 | Task 13.5 ✓ | `analysis-jobs.integration.test.ts`: `"deletes the result of a finished analysis too, so it cannot be read again (R4.7)"` |
 | 6 — Preserve try-on status in report | R7.3 | Task 13.6 ✓ | `flowReducer.test.ts`: `describe("try-on status in the report (R7.3)")` · `TryOnFlow.test.tsx`: `"keeps a created preview in the report after going back to guidance (R7.3)"` |
-| 7 — Camera button disabled until video ready | R2.5 | **Task 14.1** (new) | — |
+| 7 — Camera button disabled until video ready | R2.5 | Task 14.1 ✓ | `src/features/capture/CameraCapture.test.tsx`: `describe("video readiness gate (R2.5)")`, 3 cases; 23/23 capture tests pass |
 
-- [ ] 14.1 Disable the camera capture button until the video element is ready
+- [x] 14.1 Disable the camera capture button until the video element is ready
   - Requirements: R2.5
   - Failing regression test to write first: `CameraCapture.test.tsx` — add three cases inside a new `describe("video readiness gate (R2.5)")` block:
     1. `"keeps Take Photo disabled while the stream is live but readyState is HAVE_METADATA (1) with 0×0 dimensions"` — mock `camera.open()` resolving immediately; after phase becomes `"live"`, set `video.readyState = 1` and leave `videoWidth`/`videoHeight` at `0`; assert the button is disabled.

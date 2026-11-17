@@ -22,7 +22,9 @@ The hooks use the current Kiro format: `.kiro/hooks/*.json`, `"version": "v1"`, 
 | TypeScript quality gate | `.kiro/hooks/typescript-quality.json` | Any `.ts`/`.tsx` file (all are typechecked by `verify:fast`) | Runs `npm run verify:fast`; fixes only errors the edit caused |
 | Privacy boundary review | `.kiro/hooks/privacy-review.json` | `src-tauri/`, `services/proxy/`, photo upload, capture, consent, job text, try-on, report, API/Tauri/media adapters and `src/lib/adapters.tsx`, `src/app/App.tsx` and `flowReducer.ts`, consent and policy contracts | Applies `.kiro/prompts/privacy-review.md` to `git diff` |
 
-To capture evidence in Kiro (IDE 1.0+ or CLI 3.0+):
+A live run is recorded: both hooks fired on `PostFileSave` while Kiro CLI 3.4.0 (`kiro-cli chat --v3 --no-interactive`) implemented task 14.1; see `.kiro/reports/evidence/2026-11-17-kiro-cli-task-14.1.txt`.
+
+To capture a screen recording in Kiro for the demo (IDE 1.0+ or CLI 3.0+):
 
 1. Open the repository and check the Agent Hooks panel lists both hooks as enabled.
 2. Ask the Kiro agent to make a small edit to a TypeScript file, for example a comment in `src/app/flow.ts`. File triggers fire for changes the agent makes, not for saves typed by hand in the editor.
