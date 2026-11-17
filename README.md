@@ -88,3 +88,7 @@ scripts/                 harness verifier, repository scan, demo photo generator
 ## Privacy boundary
 
 Images and image-derived data are sensitive personal data. They stay in memory on the device, are uploaded only after explicit consent, and are held by the backend only temporarily: they are deleted on cancel, failure, start-over, or expiry (15 minutes by default). The AI provider receives the posting and neutral observation sentences only, never the photo or provider scores. Results are written to disk only when the user explicitly saves a report, and the report contains no image data. The providers' own retention terms apply to their processing.
+
+## License
+
+[MIT](LICENSE) © 2026 Kanghee Lee
