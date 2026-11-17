@@ -1,5 +1,6 @@
 // Task 4.2 — verifies R2.1 (just-in-time camera permission), R2.2 (file fallback after
 // denial), and R2.4 (tracks stop on cancel, navigation, background, close, and capture).
+// Task 14.1 — verifies R2.5 (capture button disabled until the video element is ready).
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -7,7 +8,7 @@ import { AdaptersProvider, type Adapters } from "../../lib/adapters";
 import { CameraError, type CameraAdapter } from "../../lib/media/camera";
 import { createMockAdapters } from "../../test/adapters";
 import { JPEG_SIGNATURE, syntheticFile } from "../../test/images";
-import { fakeStream, setVisibility } from "../../test/media";
+import { fakeStream, setVisibility, makeVideoReady } from "../../test/media";
 import { PhotoPicker } from "./PhotoPicker";
 
 const frameBytes = new Uint8Array(32);
@@ -36,6 +37,13 @@ function setup(camera: Partial<CameraAdapter> = {}) {
 async function startCamera(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Use camera" }));
   await screen.findByRole("button", { name: "Take photo" });
+  // Simulate the video element becoming ready (R2.5): set readyState and dimensions,
+  // then fire loadeddata so CameraCapture's checkReady listener runs.
+  const video = screen.getByLabelText<HTMLVideoElement>("Camera preview");
+  makeVideoReady(video);
+  await vi.waitFor(() =>
+    expect(screen.getByRole("button", { name: "Take photo" })).not.toBeDisabled(),
+  );
 }
 
 describe("camera capture", () => {
@@ -151,5 +159,45 @@ describe("camera capture", () => {
 
     for (const track of tracks) expect(track.stop).toHaveBeenCalledTimes(1);
     expect(screen.queryByLabelText("Camera preview")).not.toBeInTheDocument();
+  });
+});
+
+describe("video readiness gate (R2.5)", () => {
+  it("keeps Take Photo disabled while the stream is live but readyState is HAVE_METADATA (1) with 0×0 dimensions", async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole("button", { name: "Use camera" }));
+    await screen.findByRole("button", { name: "Take photo" });
+
+    const video = screen.getByLabelText<HTMLVideoElement>("Camera preview");
+    makeVideoReady(video, { readyState: 1, width: 0, height: 0 });
+
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeDisabled();
+  });
+
+  it("enables Take Photo after loadeddata fires with readyState 2 and 640×480 dimensions", async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole("button", { name: "Use camera" }));
+    await screen.findByRole("button", { name: "Take photo" });
+
+    const video = screen.getByLabelText<HTMLVideoElement>("Camera preview");
+    makeVideoReady(video, { readyState: 2, width: 640, height: 480 });
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "Take photo" })).not.toBeDisabled(),
+    );
+  });
+
+  it("keeps Take Photo disabled if an event fires while dimensions are still 0", async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole("button", { name: "Use camera" }));
+    await screen.findByRole("button", { name: "Take photo" });
+
+    const video = screen.getByLabelText<HTMLVideoElement>("Camera preview");
+    makeVideoReady(video, { readyState: 2, width: 0, height: 0 });
+
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeDisabled();
   });
 });

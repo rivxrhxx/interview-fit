@@ -1,0 +1,229 @@
+# Kiro CLI 3.4.0 headless run (kiro-cli chat --v3 --no-interactive), 2026-11-17
+# Spec corrections after review (readiness threshold, cancel and delete semantics, evidence names)
+# Raw transcript as printed by Kiro; tool-status lines kept. Driven from Claude Code.
+
+Let me read all the cited files before writing anything.
+[tool] Sub-agent: general-task-execution
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List all files in src/lib/api/
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all files in src/lib/api/
+[tool] List all files in src/lib/i18n/
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all files in src/lib/i18n/
+[tool] List all files in services/proxy/test/
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all files in services/proxy/test/
+[tool] List src/lib/api/ directory
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List src/lib/api/ directory
+[tool] List src/lib/i18n/ directory
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List src/lib/i18n/ directory
+[tool] List services/proxy/test/ directory
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List services/proxy/test/ directory
+[tool] Tool Load
+[tool] status: Completed
+[tool] List Directory
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List Directory
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List Directory
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List Directory
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List Directory
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: Completed
+The sub-agent truncated the actual file content. Let me get the specific details I need.
+[tool] Sub-agent: general-task-execution
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List all source files
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all source files
+[tool] List all Rust source files
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all Rust source files
+[tool] List all frontend source files
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all frontend source files
+[tool] List all Rust source files
+[denied] tool permission approval is not supported in non-interactive mode. Use --trust-tools=run_command to auto-approve this tool, or --trust-all-tools to auto-approve every tool.
+[tool] status: Failed: List all Rust source files
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Now let me read the remaining cited files before writing anything.
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Now read the analysis-jobs integration test and the tryOnJobs source:
+[tool] Read File
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: Completed
+Now I have everything I need. Let me read the flowReducer test to get the exact test name for blocker 6, then read the current spec files before editing.
+[tool] Read File
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: Completed
+Now I have everything. Let me read the current state of the three spec files before making targeted edits.
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Good. Now I have all the facts from the code. I'll make all the corrections in a single pass through the three files.
+
+**What I need to fix, grounded in the code:**
+
+- **R2.5**: Change `HAVE_ENOUGH_DATA (4)` → `HAVE_CURRENT_DATA (2)`; add `loadedmetadata`, `canplay`, `resize`, and an immediate check; reset readiness when tracks stop.
+- **Design blocker 2**: Add the four-layer copy distinction citing `en.ts` messages (`job.sendNotice`, `steps.consenting.description`, `steps.error.description`, `consent.groups[2]`).
+- **Design blocker 3**: Correct the `fits` formula to use `retainedBytes()` (not `store.retainedBytes() + bytes`), clarify reservation release timing, `maxActiveTryOns` name, and stored-results bound.
+- **Design blocker 4**: Change 409 → 404 `JOB_NOT_FOUND`; clarify server-side auto-cancel on close vs. desktop `DELETE`-by-key; add body-arrival re-check and 1,024-tombstone cap.
+- **Design blocker 5**: Change "returns 404" to `state: "cancelled", result: null` immediately; 404 only after `terminalRetentionMs` elapses.
+- **Design blocker 6**: Replace `tryOnResult: { styleId, styleName }` with the actual type `LastTryOn: { status: "created"; styleId } | { status: "unavailable" } | null`; fix `START_OVER` clears vs. `ANALYSIS_SUCCEEDED` sets null; cite exact test names.
+- **Task 14.1**: Fix the test spec (readyState 2 not 4; add three cases; add `loadedmetadata`/`canplay`/`resize` and immediate re-check; reset readiness in `stopTracks`).
+- **Tasks blocker table**: Fix evidence for blocker 5 to `analysis-jobs.integration.test.ts`; fix blocker 6 test name to match the actual string in the files.
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Now fix the submission readiness blocker 7 bullet in requirements.md:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+That was a no-op (same text). The requirements.md changes are correct. Now fix all five design notes:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Now fix tasks.md — the blocker coverage table (blockers 5 and 6 evidence) and the task 14.1 spec:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Now fix task 14.1 — the failing test spec and implementation notes:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Now verify the final state of all three files looks correct:
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+All three files are correct. Here is what changed:
+
+---
+
+**requirements.md**
+
+- **R2.5** — replaced `HAVE_ENOUGH_DATA (4)` with `HAVE_CURRENT_DATA (2)`; added the four events (`loadedmetadata`, `loadeddata`, `canplay`, `resize`) plus the immediate post-attach check; added the requirement to clear readiness when tracks stop.
+
+**design.md**
+
+- **Blocker 2** — rewrote the note to explain all four copy layers with exact quoted strings from `en.ts`: `job.sendNotice` (job-text transmission), `steps.consenting.description` (photo transmission), `steps.error.description` (Interview Fit storage), and `consent.groups[2]` (provider-side retention). Made explicit that the consent step says the *photo* has not yet left, not that nothing has.
+- **Blocker 3** — corrected the `fits` formula to show that the reservation is released (`reservedBytes = 0`) before the post-result call, so it doesn't double-count. Named `config.maxActiveTryOns` (not `maxActive` or `inProgressCap`). Added the `maxLiveJobs` × cap bound on stored results. Fixed `retainedBytes()` as the sum of both `store.retainedBytes()` and `tryOns.retainedBytes()`.
+- **Blocker 4** — changed 409 → 404 `JOB_NOT_FOUND` for a tombstoned POST. Separated the three cancel scenarios: server-detected disconnect (auto-cancel by job ID), desktop `DELETE`-by-key after abort/unknown-outcome (via `createWithKey` in `client.ts`), and body-arrival recheck (`takeTombstone` after parsing). Added the `MAX_TOMBSTONES = 1_024` cap and key format constraint.
+- **Blocker 5** — corrected the immediate response to `state: "cancelled", result: null` (not 404); 404 only after `terminalRetentionMs` elapses. Cited the exact test name from `analysis-jobs.integration.test.ts`.
+- **Blocker 6** — replaced `tryOnResult: { styleId, styleName }` with the actual type `LastTryOn = { status: "created"; styleId } | { status: "unavailable" } | null`. Clarified that `ANALYSIS_SUCCEEDED` sets it to `null` and `START_OVER` clears the whole state. Cited both exact test locations: `flowReducer.test.ts` `describe("try-on status in the report (R7.3)")` and `TryOnFlow.test.tsx` `"keeps a created preview in the report after going back to guidance (R7.3)"`.
+- **Blocker 7** — changed threshold to `HAVE_CURRENT_DATA (2)`; explained why (`HAVE_ENOUGH_DATA` can be unreachable on live streams); listed all four events plus the immediate check; named `checkReady` as the function pattern.
+
+**tasks.md**
+
+- **Blocker coverage table row 5** — replaced `hardening.integration.test.ts` with the real test: `analysis-jobs.integration.test.ts`, exact test name quoted.
+- **Blocker coverage table row 6** — replaced `"report carries created status"` (which does not exist in the file) with the two real test locations: `flowReducer.test.ts` describe block and the exact `TryOnFlow.test.tsx` test string.
+- **Task 14.1** — replaced one broad test case with three named cases covering: disabled at `readyState 1` with `0×0`; enabled after `loadeddata` at `readyState 2` with `640×480` (not 4); still disabled when an event fires with dimensions still `0`. Updated implementation to use `checkReady`, four event listeners plus immediate call, and `setVideoReady(false)` in `stopTracks`.
+exit=0

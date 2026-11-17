@@ -1,0 +1,175 @@
+# Kiro CLI 3.4.0 headless run (kiro-cli chat --v3 --no-interactive), 2026-11-17
+# Task 14.1 test-first implementation; the Privacy boundary review and TypeScript quality gate hooks fired on PostFileSave
+# Raw transcript as printed by Kiro; tool-status lines kept. Driven from Claude Code.
+
+I'll start by reading all the required files to understand the codebase before making any changes.
+[tool] List steering and spec files
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+[tool] List workspace root and capture feature files
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: Completed
+Now let me read the remaining files I need:
+[tool] Read File
+[tool] status: InProgress
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Now let me look at the vitest config and the existing test setup to understand how tests run:
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Check npm scripts
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Now I have a full picture. Let me run the existing tests first to confirm they all pass:
+[tool] Run existing capture tests to establish baseline
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+Good — 20 tests passing. Now I understand what I need to do. The existing `startCamera` helper calls `findByRole("button", { name: "Take photo" })` which waits for the button to appear. With the new `videoReady` gate, the button will be rendered but disabled, so `findByRole` will still find it (disabled buttons are still in the DOM with their role). But the existing tests that call `startCamera` and then immediately click "Take photo" or "Cancel camera" need the video to report readiness.
+
+Let me understand what `startCamera` does and how the existing "Take photo" click tests work — since after my change, the button will be disabled until `videoReady` is true.
+
+The key insight: existing tests like "stops tracks immediately after capture" call `startCamera` then immediately click "Take photo". After my change, the button will be disabled until a `loadeddata`/`canplay`/etc. event fires with proper readyState and dimensions. I need to make the fake video element report readiness in `startCamera` or in `fakeStream`.
+
+The video element in jsdom doesn't fire `loadeddata` or have real `readyState`/`videoWidth`/`videoHeight`. I need to simulate readiness after `srcObject` is assigned. The approach: after `startCamera`, fire the readiness events on the video with the right properties.
+
+Let me write the three failing tests first, then figure out the minimal fix for both the component and the existing test helpers.
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+Now I'll add the three failing test cases. Looking at the task description carefully:
+
+- The tests live in a new `describe("video readiness gate (R2.5)")` block inside `CameraCapture.test.tsx`
+- They need to access the `<video>` element directly to set `readyState`, `videoWidth`, `videoHeight` and fire events on it
+- The existing `startCamera` helper waits for `findByRole("button", { name: "Take photo" })` — that just finds the button in DOM, it doesn't assert it's enabled, so it will still work once the button is rendered
+- For existing tests that click "Take photo" (like "stops tracks immediately after capture"), I need to make the video report readiness — I'll update `startCamera` to simulate video readiness
+
+Let me think through the approach for the new tests:
+
+1. Test 1: `camera.open()` resolves → phase becomes "live" → video.srcObject gets assigned → `checkReady` is called once immediately. With readyState=1 and 0×0, it stays false → button disabled.
+2. Test 2: Same setup, then set readyState=2, dimensions=640×480, fire `loadeddata` → `checkReady` sees conditions met → setVideoReady(true) → button enabled.
+3. Test 3: Same setup, fire `loadeddata` while videoWidth=0 → button remains disabled.
+
+For the existing tests that click "Take photo", I need to simulate video readiness in `startCamera`. I'll update `startCamera` to find the video element and fire a readiness event after the button appears.
+
+Now let me add the failing tests first:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+I'll address both hook instructions. First, let me check the diff and the privacy review prompt, then run verify:fast.
+[tool] Show current diff for privacy review
+[tool] Read File
+[tool] status: InProgress
+[tool] status: Completed
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+**Privacy review of the diff:** The only change is a comment line addition and a changed import (`makeVideoReady` added alongside existing test helpers). No secrets, no image persistence, no vendor access, no metadata, no logs, no Tauri permissions, no HTML rendering, no inference or scoring. No release-blocking findings.
+
+Now running verify:fast — it will fail because `makeVideoReady` doesn't exist in `src/test/media.ts` yet. That's an error introduced by this session's edit, so I need to fix it before the full implementation is complete. However, I'm mid-task and the new test cases haven't been added yet either. Let me continue with the full planned sequence: add `makeVideoReady` to `src/test/media.ts`, add the three failing test cases, then run verify:fast will confirm failures for the right reasons.
+[tool] Confirm current compile error from missing import
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+Vitest doesn't fail on a missing named export at import time in this setup (it tree-shakes / defers). I'll proceed with all edits now — `makeVideoReady` into `media.ts`, the three test cases into the test file, then the component change — before running verify:fast.
+
+**Step 1 — add `makeVideoReady` to `src/test/media.ts`:**
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+I'm mid-task with the three test cases and the component change still to come. Running verify:fast now will fail because the test cases that use `makeVideoReady` haven't been added yet, so the import is unused and the new `describe` block doesn't exist. I need to finish all the edits first, then run verify:fast once at the end as required by the task. Let me continue.
+
+**Step 2 — add the three failing test cases to `CameraCapture.test.tsx`:**
+
+The existing `startCamera` helper is used by tests that click "Take photo". After the component change, `disabled = phase !== "live" || !videoReady`, so those tests need the video to be ready before the click. I'll update `startCamera` to also call `makeVideoReady` on the video element after the button appears.
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Still mid-task — the three new test cases and the component change haven't been written yet. I'll address the hook instructions after completing all edits. Continuing now.
+
+**Add the three failing test cases:**
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+The privacy hook and the verify:fast hook both fired. Let me address them in order.
+
+**Privacy review:** The diff adds test-only code — a `describe` block with three test cases, plus an updated `startCamera` helper. No secrets, no image persistence, no vendor calls, no metadata, no logs, no Tauri permissions, no user HTML, no inference or scoring. The `makeVideoReady` helper sets jsdom property overrides on a fake video element and dispatches a synthetic DOM event — no real camera data. No release-blocking findings.
+
+**verify:fast hook:** The three new tests reference `videoReady` state that doesn't exist in the component yet, so they should fail. Let me run the capture suite first to confirm the new tests fail for the expected reason, then run verify:fast.
+[tool] Run capture tests to confirm new cases fail for expected reason
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Failed: Run capture tests to confirm new cases fail for expected reason
+The three new test cases behave as expected from the task spec:
+
+- **Test 1** ("keeps disabled while readyState=1 and 0×0") — **fails**: button is not disabled (component has no readiness gate yet). ✓ expected failure.
+- **Test 2** ("enables after loadeddata with readyState=2 and 640×480") — **passes**: button is currently enabled as soon as phase=`"live"`, so `waitFor` succeeds trivially. This test will become a meaningful regression once the gate is added and it stays green only when the event actually fires. ✓ correct pre-implementation behavior.
+- **Test 3** ("keeps disabled while dimensions still 0") — **fails**: button is not disabled. ✓ expected failure.
+
+This is the correct red state. Now I'll make the minimum production change to `CameraCapture.tsx`.
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+Still mid-task — `checkReady` is defined but not yet wired to any event listeners or the button's `disabled` prop. I need to finish the component before the hooks' verify:fast request is meaningful. Completing the remaining two edits now.
+
+**Wire `checkReady` to the srcObject effect and update the button's `disabled` prop:**
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+One edit left — update the button's `disabled` prop. Then I'll address both hooks together.
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+All edits are complete. Now addressing both hooks.
+
+**Privacy review of the full component diff:**
+[tool] Show full component diff for privacy review
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+**Privacy review result:** The diff adds a boolean state (`videoReady`), a `checkReady` function that reads only `videoWidth`, `videoHeight`, and `readyState` from the video element ref (no image data, no pixels, no metadata), four DOM event listeners removed in cleanup, `setVideoReady(false)` in `stopTracks`, and an updated `disabled` predicate. No secrets, no image bytes read or persisted, no vendor calls, no metadata leakage, no logs, no Tauri permissions changed, no user-controlled HTML, no inference or scoring. No release-blocking findings.
+
+**verify:fast hook — running now:**
+[tool] Run capture suite — confirm new tests pass and existing tests still pass
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+All 23 tests pass (20 existing + 3 new). Running the full `verify:fast` now:
+[tool] Run full verify:fast suite
+[tool] status: InProgress
+[tool] status: InProgress
+[tool] status: Completed
+`verify:fast` passes: harness ✓, secrets ✓, typecheck ✓, 543 tests across 40 files ✓.
+
+Now updating `tasks.md`, `verification.md`, and `kiro-usage-log.md`:
+[tool] Replace in File
+[tool] status: Pending
+[tool] status: Completed
+exit=0
