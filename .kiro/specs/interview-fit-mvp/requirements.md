@@ -17,6 +17,7 @@
 - R2.2 WHEN permission is denied THE SYSTEM SHALL offer file selection and remain usable.
 - R2.3 THE SYSTEM SHALL accept one JPEG or PNG image up to 10 MiB and 16 megapixels.
 - R2.4 WHEN the user cancels capture THE SYSTEM SHALL stop all media tracks within one second.
+- R2.5 THE CAMERA CAPTURE BUTTON SHALL remain disabled until the video element has non-zero pixel dimensions (`videoWidth > 0` and `videoHeight > 0`) and `readyState >= HAVE_CURRENT_DATA (2)`, so a user cannot trigger a capture before at least one decodable frame is available. The component SHALL re-evaluate this condition on `loadedmetadata`, `loadeddata`, `canplay`, and `resize` events, and once immediately after the stream is attached, in case the video is already ready. Readiness SHALL be cleared when tracks are stopped.
 
 ## R3 — Consent and preprocessing
 
@@ -69,3 +70,15 @@
 - R9.1 THE PROJECT SHALL provide an installable desktop build for every OS claimed in the submission.
 - R9.2 THE DEMO SHALL support deterministic synthetic or permissioned fixtures.
 - R9.3 THE PUBLIC REPOSITORY SHALL commit the `.kiro` harness and SHALL NOT contain secrets or private images.
+
+## Submission readiness
+
+The requirements in this section were added during the 2026-11-17 external review to close gaps identified before final submission. Blockers 1–6 were addressed by tasks 13.1–13.6; blocker 7 required a new requirement (R2.5 above) and task 14.1.
+
+- **Blocker 1 — Hooks schema (→ task 13.1):** R9.3 already required the harness to commit and validate the `.kiro` harness. Task 13.1 migrated both hooks to `v1` format and extended the harness verifier. The migration is complete; the task remains open only because a live recorded run requires the Kiro IDE.
+- **Blocker 2 — Consent and error copy (→ task 13.2, R3.5):** R3.5 specifies that consent copy distinguishes job-text transmission from photo transmission, and error copy names Interview Fit. Task 13.2 implemented and tested this for English and Korean.
+- **Blocker 3 — Memory limit and live-job cap (→ task 13.3, R4.6):** R4.6 specifies pre-start reservation, post-result recheck, oversized-result discard, and in-progress cap. Task 13.3 implemented and tested all four cases.
+- **Blocker 4 — Idempotency and cancel-by-key (→ task 13.4, R4.5):** R4.5 specifies cancel-by-key before the desktop learns the job ID. Task 13.4 implemented tombstone-based cancel and tested repeated-key dedup, pre-create DELETE, and connection-close abort.
+- **Blocker 5 — Cascade delete analysis result (→ task 13.5, R4.7):** R4.7 specifies that deleting a finished analysis also deletes its result. Task 13.5 wired cascade deletion and tested GET-after-DELETE.
+- **Blocker 6 — Preserve try-on status in report (→ task 13.6, R7.3):** R7.3 requires the report to record the created try-on style even after the try-on screen closes. Task 13.6 implemented and tested this across close, reset, failed-retry, and back-and-forth navigation.
+- **Blocker 7 — Camera button disabled until video ready (→ task 14.1, R2.5):** R2.5 is a new requirement added here. Task 14.1 covers the implementation gap.

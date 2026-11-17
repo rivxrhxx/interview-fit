@@ -138,3 +138,28 @@ From an external review before submission.
   - Requirements: R7.1, R7.3
   - Tests first: close, reset, failed retry, and report back-and-forth keep the created style; start over clears it
   - Verify: `npm run verify:fast`
+
+## Submission readiness 2026-11-17
+
+Blockers identified by the external review before submission. Blockers 1–6 are covered by existing tasks 13.1–13.6 (see evidence column). Blocker 7 is a new gap with no prior task.
+
+### Blocker coverage
+
+| Blocker | Requirement | Covered by | Evidence |
+|---------|-------------|------------|----------|
+| 1 — Hooks schema migration | R9.3 | Task 13.1 (open) | Both hooks are `v1`; verifier checks schema; task open only for live-run evidence |
+| 2 — Consent and error copy | R3.5 | Task 13.2 ✓ | `consent.privacy.test.tsx`: R3.5 copy tests in en and ko pass |
+| 3 — Memory limit and live-job cap | R4.6 | Task 13.3 ✓ | `try-on.integration.test.ts`: four reservation/capacity cases pass |
+| 4 — Idempotency and cancel-by-key | R4.5 | Task 13.4 ✓ | `try-on.integration.test.ts`: tombstone, pre-create DELETE, disconnect abort |
+| 5 — Cascade delete analysis result | R4.7 | Task 13.5 ✓ | `analysis-jobs.integration.test.ts`: `"deletes the result of a finished analysis too, so it cannot be read again (R4.7)"` |
+| 6 — Preserve try-on status in report | R7.3 | Task 13.6 ✓ | `flowReducer.test.ts`: `describe("try-on status in the report (R7.3)")` · `TryOnFlow.test.tsx`: `"keeps a created preview in the report after going back to guidance (R7.3)"` |
+| 7 — Camera button disabled until video ready | R2.5 | **Task 14.1** (new) | — |
+
+- [ ] 14.1 Disable the camera capture button until the video element is ready
+  - Requirements: R2.5
+  - Failing regression test to write first: `CameraCapture.test.tsx` — add three cases inside a new `describe("video readiness gate (R2.5)")` block:
+    1. `"keeps Take Photo disabled while the stream is live but readyState is HAVE_METADATA (1) with 0×0 dimensions"` — mock `camera.open()` resolving immediately; after phase becomes `"live"`, set `video.readyState = 1` and leave `videoWidth`/`videoHeight` at `0`; assert the button is disabled.
+    2. `"enables Take Photo after loadeddata fires with readyState 2 and 640×480 dimensions"` — same setup; then set `video.readyState = 2`, `video.videoWidth = 640`, `video.videoHeight = 480`, and fire a `loadeddata` event on the video element; assert the button becomes enabled.
+    3. `"keeps Take Photo disabled if an event fires while dimensions are still 0"` — same setup; fire a `loadeddata` event while `videoWidth` is still `0`; assert the button remains disabled.
+  - Implementation: add a `videoReady` boolean state (initially `false`) to `CameraCapture`; add a `checkReady` function that reads `video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= 2` (`HAVE_CURRENT_DATA`) from the ref and calls `setVideoReady(true)` when met; in the effect that assigns `srcObject`, call `checkReady()` once immediately and attach it as a listener on `loadedmetadata`, `loadeddata`, `canplay`, and `resize`; remove those listeners in the effect cleanup; in `stopTracks`, call `setVideoReady(false)`; change the Take Photo button's `disabled` predicate from `phase !== "live"` to `phase !== "live" || !videoReady`.
+  - Verify: `npm run verify:fast`
