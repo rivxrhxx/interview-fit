@@ -19,7 +19,7 @@ describe("buildReport", () => {
     expect(text).toMatch(/^# Interview Fit report/);
     expect(text).toContain("Generated: 2026-11-16 09:30 UTC");
     expect(text).toContain("## Job context");
-    expect(text).toContain(result.jobContext.summary.replace(/-/g, "\\-"));
+    expect(text).toContain(result.jobContext.summary);
     expect(text).toContain("## Presentation guidance");
     expect(text).toContain("- What we noticed: ");
     expect(text).toContain("- Optional adjustment: ");
@@ -29,10 +29,10 @@ describe("buildReport", () => {
     expect(text).toContain("- Suggested dress formality: Business casual");
     expect(text).toContain("## What the photo shows");
     expect(text).toContain("- Lighting: The light source appears to be behind you. (Could be adjusted)");
-    expect(text).toContain("## Hairstyle try\\-on");
+    expect(text).toContain("## Hairstyle try-on");
     expect(text).toContain("Status: A neat updo hairstyle preview was created during this session. It is not included in this report.");
     expect(text).toContain("## Privacy");
-    expect(text).toContain("This report contains text only. It does not include your photo, the try\\-on preview, or any image data.");
+    expect(text).toContain("This report contains text only. It does not include your photo, the try-on preview, or any image data.");
   });
 
   it.each([
@@ -63,8 +63,51 @@ describe("buildReport", () => {
     expect(text).not.toContain("![");
     expect(text).not.toContain("<b>");
     expect(text).not.toMatch(/^# Heading/m);
-    expect(text).toContain("\\!\\[pixel\\]\\(https://track.example/p.png\\) \\<b\\>x\\</b\\> \\# Heading");
+    expect(text).toContain("!\\[pixel\\](https://track.example/p.png) \\<b\\>x\\</b\\> # Heading");
+    // Every character that can open an image, link, HTML, code span, or emphasis stays escaped.
+    expect(text).not.toMatch(/(?<!\\)[[\]<>`*_~]/);
   });
+
+  // R7.4: the report preview and the saved file read as plain text, with no needless backslashes.
+  it("keeps ordinary punctuation readable (R7.4)", () => {
+    const observation = { ...result.observations[0], text: "The photo resolution (1024×576) is fine for a side-part preview — 100% {ok} | +1 #2!" };
+    const tampered: AnalysisResult = { ...result, observations: [observation, ...result.observations.slice(1)] };
+
+    const text = report({ result: tampered, tryOnStyleId: "side-part-straight" });
+
+    expect(text).toContain("The photo resolution (1024×576) is fine for a side-part preview — 100% {ok} | +1 #2!");
+    expect(text).toContain("A side-part straight hairstyle preview was created during this session.");
+    expect(text).not.toMatch(/\\[-()#+!{}|]/);
+  });
+
+  it.each([
+    ["# Heading", "\\# Heading"],
+    ["- item", "\\- item"],
+    ["+ item", "\\+ item"],
+    ["* item", "\\* item"],
+    ["1. item", "1\\. item"],
+    ["2) item", "2\\) item"],
+    ["> quote", "\\> quote"],
+    ["---", "\\---"],
+    ["=== rule", "\\=== rule"],
+    ["    indented code", "indented code"],
+  ])("stops untrusted text that starts a line from becoming a block: %j (R7.4)", (summary, line) => {
+    const tampered: AnalysisResult = { ...result, jobContext: { ...result.jobContext, summary } };
+
+    expect(report({ result: tampered }).split("\n")).toContain(line);
+  });
+
+  // CommonMark ends a line at LF, CR, or CRLF, so every one of them must be flattened.
+  it.each(["Summary\r# Heading", "Summary\r\n- item", "Summary\n> quote", "Summary\r\r1. item"])(
+    "keeps untrusted text on one line whatever line ending it uses: %j (R7.4)",
+    (summary) => {
+      const tampered: AnalysisResult = { ...result, jobContext: { ...result.jobContext, summary } };
+      const lines = report({ result: tampered }).split(/\r\n|\r|\n/);
+
+      expect(lines.some((line) => line.startsWith("Summary "))).toBe(true);
+      expect(lines.some((line) => /^(# Heading|- item|> quote|1\. item)/.test(line))).toBe(false);
+    },
+  );
 
   it("omits anything that fails the content policy", () => {
     const tampered: AnalysisResult = {
