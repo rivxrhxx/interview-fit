@@ -58,6 +58,7 @@
 - R7.1 THE REPORT SHALL include the job analysis, neutral observations including skin-prep tips, interview-style suggestions, the hairstyle try-on status and chosen style name, generation time, and privacy notice.
 - R7.2 THE DEFAULT EXPORT SHALL NOT embed the source photo.
 - R7.3 THE REPORT SHALL record a hairstyle preview created in this session, with its style name, even after the try-on screen was closed or reset.
+- R7.4 THE REPORT SHALL render untrusted text as plain text: it SHALL NOT form images, links, HTML, code, emphasis, headings, lists, quotes, or rules, and SHALL NOT show escape characters before punctuation that has no Markdown meaning where it appears.
 
 ## R8 — Accessibility and resilience
 

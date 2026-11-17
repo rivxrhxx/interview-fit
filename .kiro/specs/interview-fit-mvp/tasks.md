@@ -163,3 +163,12 @@ Blockers identified by the external review before submission. Blockers 1–6 are
     3. `"keeps Take Photo disabled if an event fires while dimensions are still 0"` — same setup; fire a `loadeddata` event while `videoWidth` is still `0`; assert the button remains disabled.
   - Implementation: add a `videoReady` boolean state (initially `false`) to `CameraCapture`; add a `checkReady` function that reads `video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= 2` (`HAVE_CURRENT_DATA`) from the ref and calls `setVideoReady(true)` when met; in the effect that assigns `srcObject`, call `checkReady()` once immediately and attach it as a listener on `loadedmetadata`, `loadeddata`, `canplay`, and `resize`; remove those listeners in the effect cleanup; in `stopTracks`, call `setVideoReady(false)`; change the Take Photo button's `disabled` predicate from `phase !== "live"` to `phase !== "live" || !videoReady`.
   - Verify: `npm run verify:fast`
+
+## Media review fix 2026-11-17
+
+Found while preparing the submission media: the report preview showed escape characters such as `try\-on`, `side\-part`, and `\(1024×576\)` because every punctuation mark was escaped.
+
+- [x] 14.2 Escape only Markdown that can change meaning in the report
+  - Requirements: R7.4, R7.2
+  - Tests first: `buildReport.privacy.test.ts` — ordinary punctuation (hyphens, parentheses, `#`, `+`, `!`, braces, pipes) stays readable; image, link, HTML, code, emphasis, and strikethrough characters stay escaped anywhere; text that starts a line cannot open a heading, bullet or ordered list, quote, rule, setext underline, or indented code block; LF, CR, and CRLF inside untrusted text are all flattened so it cannot start a new line
+  - Verify: `npm run verify:fast`

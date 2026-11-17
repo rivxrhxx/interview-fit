@@ -14,9 +14,20 @@ export interface ReportInput {
   locale?: Locale;
 }
 
-/** Escapes Markdown syntax so untrusted text cannot form images, links, HTML, or headings. */
+/**
+ * Makes untrusted text render as plain text (R7.4). Characters that can open an image, link,
+ * HTML, code span, emphasis, or strikethrough are escaped wherever they appear. Block syntax
+ * (headings, lists, quotes, rules, indented code) only applies at the start of a line, so it is
+ * neutralized there alone; elsewhere, hyphens, parentheses, and similar punctuation stay readable.
+ */
 export function escapeMarkdown(text: string): string {
-  return text.replace(/\s*\n\s*/g, " ").replace(/[\\`*_{}[\]()#+\-!|<>]/g, (character) => `\\${character}`);
+  const inline = text
+    .replace(/\s*[\r\n]\s*/g, " ") // CommonMark ends a line at LF, CR, or CRLF
+    .trim()
+    .replace(/[\\`*_~[\]<>]/g, (character) => `\\${character}`);
+  return inline.replace(/^(?:[#+=-]|(\d{1,9})([.)]))/, (marker: string, digits?: string, delimiter?: string) =>
+    digits ? `${digits}\\${delimiter}` : `\\${marker}`,
+  );
 }
 
 function formatGenerated(date: Date): string {
